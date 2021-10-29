@@ -1,14 +1,21 @@
 import math
 import numpy as np
 from gym_duckietown.simulator import AGENT_SAFETY_RAD
+from .pure_pursuit_policy import PurePursuitPolicy
 
 POSITION_THRESHOLD = 0.04
 REF_VELOCITY = 0.7
 FOLLOWING_DISTANCE = 0.24
 AGENT_SAFETY_GAIN = 1.15
 
+DEFAULT_FRAMERATE = 30
+DELTA_TIME = 1.0 / DEFAULT_FRAMERATE
 
-class PID:
+KP = 0.8
+KI = 0
+KD = 0.5
+
+class PIDPolicy:
     """
     A Pure Pusuit controller class to act as an expert to the model
     ...
@@ -23,20 +30,18 @@ class PID:
     predict(observation)
         takes an observation image and predicts using env information the action
     """
-    def __init__(self, env, ref_velocity=REF_VELOCITY, P=0.2, I=0.0 ,D=0.0):
+    def __init__(self, env, ref_velocity=REF_VELOCITY, Kp=KP, Ki=KI, Kd=KD):
         """
         Parameters
         ----------
         ref_velocity : float
             duckiebot maximum velocity (default 0.7)
-        following_distance : float
-            distance used to follow the trajectory in pure pursuit (default 0.24)
         """
         self.env = env
         self.ref_velocity = ref_velocity
-        self.Kp=P
-        self.Ki=I
-        self.Kd=D
+        self.Kp=Kp
+        self.Ki=Ki
+        self.Kd=Kd
         
         self.clear()
 
@@ -58,32 +63,45 @@ class PID:
         action: list
             action having velocity and omega of current observation
         """
-        lane_pos=self.env.get_agent_info()
-        angle_rad=lane_pos['Simulator']['lane_position']['angle_rad']
-        if angle_rad>=0:
-            error=np.mod(angle_rad,np.pi)
-        else:
-            error=-np.mod(angle_rad,np.pi)
-        print(error)
-        #print(error)
-        current_time=lane_pos['Simulator']['timestamp']
-        delta_time=current_time-self.last_time
-        delta_error = error - self.last_error
-
-        self.PTerm=self.Kp*error
-        self.ITerm+=error*delta_time
-
-        self.DTerm=0.0
-        if delta_time > 0:
-            self.DTerm=delta_error/delta_time
-
-        self.last_time=current_time
-        self.last_error=error
-
-        #print('P:{}, I:{}, D:{}'.format(self.PTerm,self.Ki * self.ITerm,self.Kd * self.DTerm))
-
-        steering=self.PTerm + (self.Ki * self.ITerm) + (self.Kd * self.DTerm)
-
-        return np.array([self.ref_velocity,steering])
+        e, i, d = self.get_pid_val()
+        print(e, i, d)
+        if e is None:
+            return 0, 0
+            
+        ux = self.Kp * e + self.Ki * i + self.Kd * d
+        vel = self.ref_velocity
+        
+        ratio = ux / vel
+        ratio = max(-1, ratio)
+        ratio = min(1, ratio)
+        
+        angle = math.asin(ratio)
+        
+        return vel, angle
+        
+    def get_pid_val(self):
+        if not self.env.full_transparency:
+            print("not simulated environment, cannot get error")
+            return None, None, None
+        e = self.get_error()
+        i = self.get_integral()
+        d = self.get_dif()
+        return e, i, d    
+    
+    def get_error(self):
+        info = self.env.get_agent_info()
+        e = info['Simulator']['lane_position']['dist']
+        return e
+    
+    def get_integral(self):
+        cur_err = self.get_error()
+        self.ITerm += cur_err * DELTA_TIME
+        return self.ITerm
+        
+    def get_dif(self):
+        cur_err = self.get_error()
+        d_err = cur_err - self.last_error
+        self.last_error = cur_err
+        return d_err / DELTA_TIME
     
 
