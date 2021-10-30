@@ -1,7 +1,5 @@
 import math
 import numpy as np
-from gym_duckietown.simulator import AGENT_SAFETY_RAD
-from .pure_pursuit_policy import PurePursuitPolicy
 
 POSITION_THRESHOLD = 0.04
 REF_VELOCITY = 0.7
@@ -12,7 +10,7 @@ DEFAULT_FRAMERATE = 30
 DELTA_TIME = 1.0 / DEFAULT_FRAMERATE
 
 KP = 0.8
-KI = 0
+KI = 0.2
 KD = 0.5
 
 class PIDPolicy:
@@ -46,13 +44,10 @@ class PIDPolicy:
         self.clear()
 
     def clear(self):
-        self.PTerm = 0.0
         self.ITerm = 0.0
-        self.DTerm = 0.0
         self.last_error = 0.0
-        self.last_time = 0.0
 
-    def predict(self):
+    def predict(self, obs):
         """
         Parameters
         ----------
@@ -90,6 +85,8 @@ class PIDPolicy:
     
     def get_error(self):
         info = self.env.get_agent_info()
+        if 'lane_position' not in info['Simulator']:
+            return self.last_error
         e = info['Simulator']['lane_position']['dist']
         return e
     
@@ -104,4 +101,3 @@ class PIDPolicy:
         self.last_error = cur_err
         return d_err / DELTA_TIME
     
-
