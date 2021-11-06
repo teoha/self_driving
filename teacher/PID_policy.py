@@ -2,16 +2,18 @@ import math
 import numpy as np
 
 POSITION_THRESHOLD = 0.04
-REF_VELOCITY = 0.7
+REF_VELOCITY = 0.5
 FOLLOWING_DISTANCE = 0.24
 AGENT_SAFETY_GAIN = 1.15
 
 DEFAULT_FRAMERATE = 30
 DELTA_TIME = 1.0 / DEFAULT_FRAMERATE
 
-KP = 0.8
-KI = 0.2
-KD = 0.5
+KP = 5
+KI = 0.1
+KD = 2
+
+ANGLE_THRESHOLD = 0.1
 
 class PIDPolicy:
     """
@@ -58,8 +60,13 @@ class PIDPolicy:
         action: list
             action having velocity and omega of current observation
         """
+        cur_angle = self.get_angle()
+        if abs(cur_angle - math.pi / 2) < ANGLE_THRESHOLD:
+            return 0, -math.pi / 2
+        elif abs(cur_angle + math.pi / 2) < ANGLE_THRESHOLD:
+            return 0, math.pi / 2
+
         e, i, d = self.get_pid_val()
-        print(e, i, d)
         if e is None:
             return 0, 0
             
@@ -73,6 +80,14 @@ class PIDPolicy:
         angle = math.asin(ratio)
         
         return vel, angle
+
+    def get_angle(self):
+        if not self.env.full_transparency:
+            print("not simulated environment, cannot get error")
+            return None
+        info = self.env.get_agent_info()
+        cur_angle = info['Simulator']['cur_angle']
+        return cur_angle
         
     def get_pid_val(self):
         if not self.env.full_transparency:
