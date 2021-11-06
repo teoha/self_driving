@@ -42,6 +42,7 @@ class PIDPolicy:
         self.Kp=Kp
         self.Ki=Ki
         self.Kd=Kd
+        self.prev_ratio=None
         
         self.clear()
 
@@ -61,10 +62,8 @@ class PIDPolicy:
             action having velocity and omega of current observation
         """
         cur_angle = self.get_angle()
-        if abs(cur_angle - math.pi / 2) < ANGLE_THRESHOLD:
-            return 0, -math.pi / 2
-        elif abs(cur_angle + math.pi / 2) < ANGLE_THRESHOLD:
-            return 0, math.pi / 2
+        # if abs(cur_angle - math.pi / 2) < ANGLE_THRESHOLD or abs(cur_angle + math.pi / 2) < ANGLE_THRESHOLD:
+        #     return 0, math.pi / 2
 
         e, i, d = self.get_pid_val()
         if e is None:
@@ -76,7 +75,9 @@ class PIDPolicy:
         ratio = ux / vel
         ratio = max(-1, ratio)
         ratio = min(1, ratio)
-        
+        if self.prev_ratio and self.prev_ratio == -ratio:
+            ratio = -ratio
+        self.prev_ratio = ratio
         angle = math.asin(ratio)
         
         return vel, angle
