@@ -37,9 +37,12 @@ map_img, goal, start_pos = env.get_task_info()
 print("start tile:", start_pos, " goal tile:", goal)
 # print(map_img)
 from . import MapGrid
+from . import BFS
 
 grid = MapGrid(map_img)
-
+planner = BFS(map_img,goal,start_pos,grid.get_grid())
+path = planner.search()
+# print(path)
 
 # Show the map image
 # White pixels are drivable and black pixels are not.
@@ -59,34 +62,34 @@ model.load_state_dict(torch.load('./iil_baseline/' + args.model + '.pt', map_loc
 
 policy_optimizer = torch.optim.Adam(model.parameters())
 
-path = {}
-path1_0 = {}
-for i in range(5):
-    path[(i, 1)] = (i+1,1)
-    path[(i,0)] = (i, 1)
-    path[(i,2)] = (i, 1)
-for i in range(70):
-    path[(i, 1)] = (i+1,1)
-    path[(i,0)] = (i, 1)
-    path[(i,2)] = (i, 1)
+# path = {}
+# path1_0 = {}
+# for i in range(5):
+#     path[(i, 1)] = (i+1,1)
+#     path[(i,0)] = (i, 1)
+#     path[(i,2)] = (i, 1)
+# for i in range(70):
+#     path[(i, 1)] = (i+1,1)
+#     path[(i,0)] = (i, 1)
+#     path[(i,2)] = (i, 1)
 
-path2 = {(7,7):(6,7), (6,7):(5,7),(5,7):(4,7), (4,7):(3,7),(3,7):(2,7),(2,7):(1,7),(1,7):(1,6),
-            (1,6): (1,5), (1,5): (1,4), (1,4): (1,3), (1,3):(1,2), (1,2): (1,1)}
-path2.clear()
+# path2 = {(7,7):(6,7), (6,7):(5,7),(5,7):(4,7), (4,7):(3,7),(3,7):(2,7),(2,7):(1,7),(1,7):(1,6),
+#             (1,6): (1,5), (1,5): (1,4), (1,4): (1,3), (1,3):(1,2), (1,2): (1,1)}
+# path2.clear()
 
-for i in range(8):
-    path2[(0, i)] = (1,i)
-    path2[(2,i)] = (1,i)
-    path2[(i,8)] = (i, 7)
-    path2[(i,6)] = (i, 7)
-    path2[(i+1,7)] = (i,7)
-    path2[(1,i+1)] = (1,i)
-path2[(7,1)] = (6,1)
+# for i in range(8):
+#     path2[(0, i)] = (1,i)
+#     path2[(2,i)] = (1,i)
+#     path2[(i,8)] = (i, 7)
+#     path2[(i,6)] = (i, 7)
+#     path2[(i+1,7)] = (i,7)
+#     path2[(1,i+1)] = (1,i)
+# path2[(7,1)] = (6,1)
 
 input_shape = (40,80)
 dataset = MemoryMapDataset(25000, (3, *input_shape), (2,), "")
 learner = Policy(
-    path=path2,
+    path=path,
     map_grid=grid,
     goal_tile=goal,
     model=model,
@@ -121,13 +124,21 @@ def preprocess_observation(observation):
     # print(type(obs), obs.shape)
     return obs
 
-for i in range(2000):
+actions = []
+
+for i in range(10000):
     obs = preprocess_observation(obs)
     action = learner.predict(obs, curr_pos)
+    try:
+        action = action.numpy()
+    except AttributeError:
+        pass
     print(f'action={action}')
+    actions.append(action)
     obs, reward, done, info = env.step(action)
     curr_pos = info['curr_pos']
 
+    if curr_pos == goal: break
 
     print('Steps = %s, Timestep Reward=%.3f, curr_tile:%s'
           % (env.step_count, reward, curr_pos))
@@ -135,3 +146,6 @@ for i in range(2000):
 
 
 
+# dump the controls using numpy
+np.savetxt(f'./{args.map_name}_seed{args.seed}_start_{start_pos[0]},{start_pos[1]}_goal_{goal[0]},{goal[1]}.txt',
+           actions, delimiter=',')
