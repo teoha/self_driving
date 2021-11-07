@@ -73,36 +73,6 @@ class Policy(NeuralNetworkPolicy):
 
         return self.prev_act
 
-        # if not self.adjust_done:
-        #     self.prev_act = self.adjust_face()
-        #     # print("adjust face")
-        # elif self.prev_tile is None or not self.is_turning():
-        #     # print("NN")
-        #     if self.prev_tile is None:
-        #         self.prev_tile = self.cur_tile
-        #         self.prev_tile_step = self.cur_tile
-        #     # Use NN instructions
-        #     self.prev_act = super().predict(obs)
-        # # Continue action if in same tile
-        # elif self.is_turning():
-        #     # print("prev", self.is_turning())
-        #     return self.prev_act
-        # # elif self.path is None:
-        # #     self.prev_act = self.left()
-        # else:
-        #     # print("get dire")
-        #     self.prev_act = self.get_dir()
-        # # print(self.cur_tile, self.prev_tile)
-        # if self.prev_tile_step != self.cur_tile:
-        #     print(self.prev_tile_step, self.cur_tile)
-        #     self.update_face()
-        #     self.prev_tile = self.prev_tile_step
-        #     self.prev_tile_step = self.cur_tile
-        #     # print(self.face, self.get_dir_path())
-        #     if self.to_adjust():
-        #         self.adjust_done = False
-        # return self.prev_act
-
     def is_turning(self):
         '''
         returns 1 if turning left
@@ -121,20 +91,6 @@ class Policy(NeuralNetworkPolicy):
         if dpi * dnj == -1 or dpj * dni == 1:
             return 1
         return -1
-
-    # def less_turn(self, act):
-    #     '''
-    #     Less turning the longer in turning phase
-    #     '''
-    #     v, a = act
-    #     if a < 0:
-    #         a += math.pi / 120
-    #         a = min(a, 0)
-    #     else:
-    #         a -= math.pi / 120
-    #         a = max(a, 0)
-        
-    #     return v, a
 
     def get_turn_act(self):
         # New turn action
@@ -156,14 +112,6 @@ class Policy(NeuralNetworkPolicy):
             ang = max(ang, 0)
 
         return vel, ang
-
-        # i = self.is_turning()
-        # self.prev_act = self.less_turn(self.prev_act)
-        # if i == 0:
-        #     return self.prev_act
-        # if i == 1:
-        #     return self.left()
-        # return self.right()
 
 
     def right(self):
@@ -225,10 +173,6 @@ class Policy(NeuralNetworkPolicy):
         if self.adjust_done:
             self.adj_step = 0
 
-        # if self.turn_delta == 1:
-        #     return 0, -math.pi / 4
-        # elif self.turn_delta == 3:
-        #     return 0, math.pi / 4
         return 0, math.pi / 2
 
     def to_adjust(self):
@@ -241,11 +185,3 @@ class Policy(NeuralNetworkPolicy):
         self.turn_delta = (dir_path - self.face) % 4
         return self.turn_delta == 2
         
-        
-    
-
-    
-
-    
-
-    
