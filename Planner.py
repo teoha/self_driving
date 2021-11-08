@@ -1,9 +1,12 @@
 import numpy as np
 
 class BFS:
-        def __init__(self,env,grid):
+        def __init__(self, map_img, goal, start_pos, grid):
             self.grid=grid
-            self.map_img, self.goal, self.start_pos = env.get_task_info()
+            # self.map_img, self.goal, self.start_pos = env.get_task_info()
+            self.map_img = map_img
+            self.goal = goal
+            self.start_pos = start_pos
 
         def search(self):
             plan={}
@@ -21,7 +24,7 @@ class BFS:
                 visited_list.append(current_node)
 
                 if current_node.parent is not None:
-                    plan[str(current_node.position)]=current_node.parent.position
+                    plan[current_node.position]=current_node.parent.position
 
                 if current_node.isEdge:
                     continue
