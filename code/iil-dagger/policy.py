@@ -1,18 +1,36 @@
 from .learner import NeuralNetworkPolicy
 import math
-import numpy as np
 
 REF_VELOCITY = 0.5
 ADJ_STEPS = 40
 ANGLE_THRESHOLD = 0.1
-ANGLE_DECAY = math.pi / 100
+ANGLE_DECAY = math.pi / 120
 
 class Policy(NeuralNetworkPolicy):
-    def __init__(self, path, map_grid, goal_tile, *args, **kwargs):
+    """
+    Policy used to output control files
+
+    ...
+    
+    Attributes
+    ----------
+    path : dict
+        path that defines the next_tile for each drivable tile on the grid
+    goal_tile : int, int
+        tuple of the goal tile
+
+    Methods
+    -------
+    predict(obs):
+        returns action based on observation obs
+
+    
+    """
+    def __init__(self, path, goal_tile, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.path = path
-        self.map_grid = map_grid
         self.goal_tile = goal_tile
+        self.reached_goal = False
 
         # Current, previous tiles, and previous action
         self.prev_tile = None
@@ -36,6 +54,7 @@ class Policy(NeuralNetworkPolicy):
 
         self.cur_tile = cur_pos
         if self.cur_tile == self.goal_tile:
+            self.reached_goal = True
             return 0, 0
 
         # Just started - use NN
@@ -165,7 +184,6 @@ class Policy(NeuralNetworkPolicy):
         if self.face == dir_path:
             return 0, 0
         self.adj_step += 1
-        # self.turn_delta = (dir_path - self.face) % 4
 
         print(self.adj_step, ADJ_STEPS)
         self.adjust_done = self.adj_step >= ADJ_STEPS
