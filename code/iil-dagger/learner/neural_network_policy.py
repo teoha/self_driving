@@ -53,6 +53,7 @@ class NeuralNetworkPolicy:
         self.batch_size = kwargs.get('batch_size', 32)
         self.input_shape = kwargs.get('input_shape', (60, 80))
         self.max_velocity = kwargs.get('max_velocity', 0.7)
+        self.col_thresh = kwargs.get('col_thresh', 80)
 
         self.episode = 0
 
@@ -133,7 +134,21 @@ class NeuralNetworkPolicy:
     def save(self):
         torch.save(self.model.state_dict(), os.path.join(self.storage_location , 'model.pt'))
 
+    def preprocess(self, observation):
+        img = Image.fromarray(observation)
+        img = img.resize(self.input_shape[::-1])
+        img = img.crop((0, 20, 80, 60))
+        fn = lambda x : 255 if x > self.col_thresh else 0
+        img = img.convert('L')
+        img = img.point(fn, mode='1')
+        img = img.convert('RGB')
+        obs = np.array(img)
+        
+        return obs
+
     def _transform(self, observations, expert_actions):
+        # Preprocess images
+        observations = [self.preprocess(observation) for observation in observations]
         # Resize images
         observations = [Image.fromarray(cv2.resize(observation, dsize=self.input_shape[::-1])) for observation in observations]
         # Transform to tensors
