@@ -1,4 +1,5 @@
 from .learner import NeuralNetworkPolicy
+from .lane_detection import *
 import math
 
 REF_VELOCITY = 0.5
@@ -56,6 +57,14 @@ class Policy(NeuralNetworkPolicy):
         if self.cur_tile == self.goal_tile:
             self.reached_goal = True
             return 0, 0
+
+        # Localization w.r.t center of right lane
+        # pose=get_pose(obs)
+        # if pose is not None:
+        #     print("================")
+        #     print("angle:{}, dist:{}".format(pose[0], pose[1]))
+        #     print("================")
+        #     input()
 
         # Just started - use NN
         if self.prev_tile is None:

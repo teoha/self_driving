@@ -69,6 +69,8 @@ def get_lanes(image):
         maxLineGap=25
     )
 
+    if lines is None: # if no lanes detected
+        return None, None
     steep_lines=[]
     for line in lines:
         for x1, y1, x2, y2 in line:
@@ -134,7 +136,7 @@ def get_raw_pose(line):
     # Dist w.r.t center
     points=dst1.reshape(2,2)
     x_coords, y_coords = zip(*points)
-    A = np.vstack([x_coords,ones(len(x_coords))]).T
+    A = np.vstack([x_coords,np.ones(len(x_coords))]).T
     m, c = np.linalg.lstsq(A, y_coords)[0]
     intersection_y=m*0.5+c
     dist=intersection_y*np.sin(angle)
@@ -144,11 +146,11 @@ def get_raw_pose(line):
 def get_pose(obs):
     left_line, right_line = get_lanes(obs)
 
-    if left_line not None:
+    if left_line is not None:
         left_angle, left_dist=get_raw_pose(left_line)
         left_dist_from_center=0.25-left_dist
         return left_angle, left_dist_from_center
-    if right_line not None:
+    if right_line is not None:
         right_angle, right_dist=get_raw_pose(right_line)
         right_dist_from_center=right_dist-0.25
         return right_angle, right_dist_from_center
