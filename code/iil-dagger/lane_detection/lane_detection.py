@@ -39,13 +39,21 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
+def get_yellow_lanes(obs):
+    image=select_yellow(obs)
+    return get_lanes(image)
+
+def get_white_lanes(obs):
+    image=select_white(obs)
+    return get_lanes(image)
+
 def get_lanes(image):
     height,width,channels=image.shape
     region_of_interest_vertices = [
         (0, height),
-        (0, height/2),
-        (width/2, height/6),
-        (width, height/2),
+        (0, height/2.3),
+        (width/2, height/7),
+        (width, height/2.3),
         (width, height),
     ]
 
@@ -71,13 +79,6 @@ def get_lanes(image):
 
     if lines is None: # if no lanes detected
         return None, None
-    steep_lines=[]
-    for line in lines:
-        for x1, y1, x2, y2 in line:
-            slope = (y2 - y1) / (x2 - x1) # <-- Calculating the slope.
-            if math.fabs(slope) < 0.4: # <-- Only consider extreme slope
-                continue
-            steep_lines.append(line)
 
     left_line_x = []
     left_line_y = []
@@ -123,6 +124,18 @@ def get_lanes(image):
         right_line=[right_x_start, max_y, right_x_end, min_y]
         fitted_lines.append([right_x_start, max_y, right_x_end, min_y])
 
+        q=input()
+        if q=='l':
+            ## Code to display lane lines
+            line_image = draw_lines(
+                image,
+                [fitted_lines],
+                thickness=5
+            )
+            plt.figure()
+            plt.imshow(line_image)
+            plt.show()
+
     return left_line, right_line
 
 def get_raw_pose(line):
@@ -144,15 +157,43 @@ def get_raw_pose(line):
     return angle, abs(dist)
 
 def get_pose(obs):
-    left_line, right_line = get_lanes(obs)
+    white_left, white_right = get_white_lanes(obs.copy())
+    yellow_left, yellow_right = get_yellow_lanes(obs.copy())
 
-    if left_line is not None:
-        left_angle, left_dist=get_raw_pose(left_line)
+    if yellow_left is not None: # Use yellow center lane marker to localize first
+        left_angle, left_dist=get_raw_pose(yellow_left)
         left_dist_from_center=0.25-left_dist
         return left_angle, left_dist_from_center
-    if right_line is not None:
-        right_angle, right_dist=get_raw_pose(right_line)
+    if white_right is not None: # if yellow marker cannot be found, use white lane marker
+        right_angle, right_dist=get_raw_pose(white_right)
         right_dist_from_center=right_dist-0.25
         return right_angle, right_dist_from_center
+    if yellow_right is not None: # use yellow marker on the right to localize
+        right_angle, right_dist=get_raw_pose(yellow_right)
+        right_dist_from_center=right_dist+0.25
+        return right_angle, right_dist_from_center
+    if white_left is not None: # Use white right lane marker to localize
+        left_angle, left_dist=get_raw_pose(white_left)
+        left_dist_from_center=0.75-left_dist
+        return left_angle, left_dist_from_center
 
     return None
+
+def select_yellow(image):
+    converted = convert_hls(image)
+    # yellow color mask
+    lower = np.uint8([ 10,   0, 90])
+    upper = np.uint8([ 50, 255, 255])
+    yellow_mask = cv2.inRange(converted, lower, upper)
+    return cv2.bitwise_and(image, image, mask = yellow_mask)
+
+def select_white(image):
+    converted = convert_hls(image)
+    # white color mask
+    lower = np.uint8([  0, 168,   0])
+    upper = np.uint8([255, 255, 255])
+    white_mask = cv2.inRange(converted, lower, upper)
+
+    return cv2.bitwise_and(image, image, mask = white_mask)
+def convert_hls(image):
+    return cv2.cvtColor(image, cv2.COLOR_RGB2HLS)

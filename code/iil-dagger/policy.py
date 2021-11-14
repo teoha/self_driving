@@ -58,13 +58,13 @@ class Policy(NeuralNetworkPolicy):
             self.reached_goal = True
             return 0, 0
 
-        # Localization w.r.t center of right lane
-        # pose=get_pose(obs)
-        # if pose is not None:
-        #     print("================")
-        #     print("angle:{}, dist:{}".format(pose[0], pose[1]))
-        #     print("================")
-        #     input()
+        #Localization w.r.t center of right lane
+        pose=get_pose(obs)
+        if pose is not None:
+            print("================")
+            print("angle:{}, dist:{}".format(pose[0], pose[1]))
+            print("================")
+            # input()
 
         # Just started - use NN
         if self.prev_tile is None:
