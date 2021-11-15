@@ -6,6 +6,7 @@ REF_VELOCITY = 0.5
 ADJ_STEPS = 40
 ANGLE_THRESHOLD = 0.1
 ANGLE_DECAY = math.pi / 120
+PERIOD=0.02
 
 class Policy(NeuralNetworkPolicy):
     """
@@ -49,6 +50,12 @@ class Policy(NeuralNetworkPolicy):
         self.adj_step = 0
         self.adjust_done = True
 
+        # Localized global orientation
+        self.orientation=None
+        self.x=None
+        self.y=None
+
+
     def predict(self, obs, cur_pos=None):
         if cur_pos is None:
             return 0, 0
@@ -57,14 +64,6 @@ class Policy(NeuralNetworkPolicy):
         if self.cur_tile == self.goal_tile:
             self.reached_goal = True
             return 0, 0
-
-        #Localization w.r.t center of right lane
-        pose=get_pose(obs)
-        if pose is not None:
-            print("================")
-            print("angle:{}, dist:{}".format(pose[0], pose[1]))
-            print("================")
-            # input()
 
         # Just started - use NN
         if self.prev_tile is None:
@@ -84,8 +83,8 @@ class Policy(NeuralNetworkPolicy):
         
         # Entered new tile
         if self.prev_tile_step != self.cur_tile:
-            print(self.prev_tile_step, self.cur_tile)
-            # Update prev_tiles
+
+            # Update previous tiles
             self.prev_tile = self.prev_tile_step
             self.prev_tile_step = self.cur_tile
 
@@ -98,6 +97,58 @@ class Policy(NeuralNetworkPolicy):
             # Facing wrong direction - Rotate 180 degrees
             if self.to_adjust():
                 self.adjust_done = False
+
+            #Localization w.r.t center of right lane only if going straight
+            pose=get_pose(obs)
+            # print("pose:{},{}".format(*pose))
+            # print("{},{},{}".format(self.prev_tile, self.prev_tile_step,self.cur_tile))
+            # print("turning:{}".format(self.is_turning()))
+            # input()
+            if pose is not None and self.is_turning()==0:
+                orientation, displacement=pose
+                rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)
+
+                # Localize position
+                rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
+                rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
+
+                if rough_orientation==0:
+                    self.x=rough_x
+                    self.y=rough_y+0.75-displacement
+                elif rough_orientation==1:
+                    self.x=rough_x+0.75-displacement
+                    self.y=rough_y
+                elif rough_orientation==2:
+                    self.x=rough_x
+                    self.y=rough_y+0.25+displacement
+                elif rough_orientation==3:
+                    self.x=rough_x+0.25+displacement
+                    self.y=rough_y
+                else:
+                    print("invalid orientation")
+
+                # Localize orientation
+                self.orientation=rough_orientation+orientation
+
+                print("================")
+                print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+                print("================")
+                input()
+                
+
+            # print("{},{} =================================================================".format(self.prev_tile_step, self.cur_tile))
+            # input()
+
+
+        else:
+            # Localize based on actions since last localization
+            # This localization does not start until the first tile is reached
+            if None not in (self.x, self.y,self.orientation):
+                self.x, self.y, self.orientation = self.get_new_pose(self.x,self.y,self.orientation,*self.prev_act, PERIOD)
+                print("================")
+                print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+                print("================")
+                #input()
 
         return self.prev_act
 
@@ -114,6 +165,7 @@ class Policy(NeuralNetworkPolicy):
         dpj = cj - pj        
         dni = ni - ci
         dnj = nj - cj
+        # print("dpi:{}, dpj:{}, dni:{}, dnj:{}".format(dpi,dpj,dni,dnj))
         if dpi == dni and dpj == dnj or dpi == 0 and dpj == 0:
             return 0
         if dpi * dnj == -1 or dpj * dni == 1:
@@ -211,4 +263,10 @@ class Policy(NeuralNetworkPolicy):
         dir_path = self.get_dir_path()
         self.turn_delta = (dir_path - self.face) % 4
         return self.turn_delta == 2
-        
+
+    def get_new_pose(self, x,y,theta,v,omega,t):
+        new_x=x-(v/omega)*np.sin(theta)+(v/omega)*np.sin(theta+omega*t)
+        new_y=y+(v/omega)*np.cos(theta)-(v/omega)*np.cos(theta+omega*t)
+        new_theta=theta+omega*t
+
+        return new_x, new_y, new_theta
