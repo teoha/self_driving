@@ -4,8 +4,8 @@ import math
 
 REF_VELOCITY = 0.5
 ADJ_STEPS = 40
-ANGLE_THRESHOLD = 0.1
-ANGLE_DECAY = math.pi / 120
+ANGLE_THRESHOLD = 0.2
+ANGLE_DECAY = math.pi / 100
 PERIOD=0.02
 
 class Policy(NeuralNetworkPolicy):
@@ -183,11 +183,13 @@ class Policy(NeuralNetworkPolicy):
 
         self.turn_step += 1
 
+        need_correction = self.need_correction() or 0
+    
         # Decay angle turned over time
-        if ang < 0:
+        if need_correction == 1 or need_correction == 0 and ang < 0:
             ang += ANGLE_DECAY
             ang = min(ang, 0)
-        else:
+        elif need_correction == -1 or need_correction == 0 and ang >= 0:
             ang -= ANGLE_DECAY
             ang = max(ang, 0)
 
@@ -270,3 +272,62 @@ class Policy(NeuralNetworkPolicy):
         new_theta=theta+omega*t
 
         return new_x, new_y, new_theta
+
+    def get_next_tile_exact(self):
+        '''
+        get exact coordinates for center of lane of next tile
+        '''
+        if self.cur_tile is None:
+            return None
+        next_tile = self.path[self.cur_tile]
+
+        x, y = next_tile
+        
+        if next_tile == self.goal_tile:
+            return (x + 0.5, y + 0.5)
+        
+        d_path = self.get_dir_path()
+
+        if d_path == 0:
+            return x, y + 0.75
+        elif d_path == 1:
+            return x + 0.75, y + 1
+        elif d_path == 2:
+            return x + 1, y + 0.25
+        else:
+            return x + 0.25, y
+
+
+    def get_ideal_angle(self):
+        if None in (self.x, self.y, self.orientation):
+            return None
+        nx, ny = self.get_next_tile_exact()
+        cx, cy = self.x, self.y
+        dx = nx - cx
+        dy = ny - cy
+        ang = math.atan(dy / dx)
+        # Adjust from 1st/4th quad to 3rd/2nd quad
+        if dx < 0:
+            ang += math.pi
+        return ang
+
+
+    def need_correction(self):
+        '''
+        Returns if correction needed comparing ideal angle and cur_angle
+        0, 1, -1: not needed, clockwise turning, anti clockwise turning
+        '''
+        ideal_angle = self.get_ideal_angle()
+        cur_angle = self.orientation
+        if ideal_angle is None or cur_angle is None:
+            return None
+        d_angle = (ideal_angle - cur_angle) % (2 * math.pi)
+        if abs(d_angle) < ANGLE_THRESHOLD:
+            return 0
+        # clockwise
+        if d_angle < math.pi:
+            return 1
+        # anti-clockwise
+        return -1
+        
+        
