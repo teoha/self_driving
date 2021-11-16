@@ -1,13 +1,19 @@
 import os
 import json
+import sys
 
 MODEL = 'model_map1_0bw'
 
 def main():
     with open('../goal.json') as f:
         data = json.load(f)
-    
-    for mn, task in data.items():        
+
+    mp = None
+    if sys.argv[1:]:
+        mp = int(sys.argv[1])
+
+    for mn, task in data.items():
+        if mp is not None and mp != int(mn[3]): continue    
         seed = task['seed'][0]
         start = task['start']
         start = ','.join([str(x) for x in start])

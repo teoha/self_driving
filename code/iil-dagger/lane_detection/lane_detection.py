@@ -88,7 +88,7 @@ def get_lanes(image):
     for line in lines:
         for x1, y1, x2, y2 in line:
             slope = (y2 - y1) / (x2 - x1) # <-- Calculating the slope.
-            if math.fabs(slope) < 0.4: # <-- Only consider extreme slope
+            if math.fabs(slope) < 0.3: # <-- Only consider extreme slope
                 continue
             if slope <= 0: # <-- If the slope is negative, left group.
                 left_line_x.extend([x1, x2])
