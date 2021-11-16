@@ -7,6 +7,9 @@ ADJ_STEPS = 40
 ANGLE_THRESHOLD = 0.2
 ANGLE_DECAY = math.pi / 100
 PERIOD=0.02
+ANGLE_THRESHOLD = 0.1
+ANGLE_DECAY = math.pi / 120
+PERIOD=0.05
 
 class Policy(NeuralNetworkPolicy):
     """
@@ -55,6 +58,12 @@ class Policy(NeuralNetworkPolicy):
         self.x=None
         self.y=None
 
+        # variables for updating position
+        self.gain = 1.0
+        self.trim = 0.0
+        self.radius = 0.0318
+        self.k = 27.0
+        self.limit = 1.0
 
     def predict(self, obs, cur_pos=None):
         if cur_pos is None:
@@ -65,6 +74,7 @@ class Policy(NeuralNetworkPolicy):
             self.reached_goal = True
             return 0, 0
 
+        prev_prev_act=self.prev_act
         # Just started - use NN
         if self.prev_tile is None:
             # initialise prev_tiles
@@ -128,7 +138,7 @@ class Policy(NeuralNetworkPolicy):
                     print("invalid orientation")
 
                 # Localize orientation
-                self.orientation=rough_orientation+orientation
+                self.orientation=(rough_orientation*np.pi/2)+orientation
 
                 print("================")
                 print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
@@ -144,7 +154,8 @@ class Policy(NeuralNetworkPolicy):
             # Localize based on actions since last localization
             # This localization does not start until the first tile is reached
             if None not in (self.x, self.y,self.orientation):
-                self.x, self.y, self.orientation = self.get_new_pose(self.x,self.y,self.orientation,*self.prev_act, PERIOD)
+                self.step(np.array(prev_prev_act))
+
                 print("================")
                 print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
                 print("================")
@@ -331,3 +342,120 @@ class Policy(NeuralNetworkPolicy):
         return -1
         
         
+    def update_physics(self, action, delta_time=None):
+        if delta_time is None:
+            delta_time = 1/30
+        wheelVels = action * 1.2 * 1
+        print(wheelVels)
+        prev_pos = np.array([self.x,0,self.y])
+        # Update the robot's position
+        pos, self.orientation = self._update_pos(pos=np.array([self.x,0,self.y]),
+                                                   angle=self.orientation,
+                                                   wheel_dist=0.102,
+                                                   wheelVels=wheelVels,
+                                                   deltaTime=delta_time)
+
+        self.x=pos[0]
+        self.y=pos[2]
+
+    def _update_pos(self, pos, angle, wheel_dist, wheelVels, deltaTime):
+        """
+        Update the position of the robot, simulating differential drive
+
+        returns new_pos, new_angle
+        """
+
+        Vl, Vr = wheelVels
+        l = wheel_dist
+
+        # If the wheel velocities are the same, then there is no rotation
+        if Vl == Vr:
+            pos = pos + deltaTime * Vl * self.get_dir_vec(angle)
+            return pos, angle
+
+        # Compute the angular rotation velocity about the ICC (center of curvature)
+        w = (Vr - Vl) / l
+
+        # Compute the distance to the center of curvature
+        r = (l * (Vl + Vr)) / (2 * (Vl - Vr))
+
+        # Compute the rotation angle for this time step
+        rotAngle = w * deltaTime
+
+        # Rotate the robot's position around the center of rotation
+        r_vec = self.get_right_vec(angle)
+        px, py, pz = pos
+        cx = px + r * r_vec[0]
+        cz = pz + r * r_vec[2]
+        npx, npz = self.rotate_point(px, pz, cx, cz, rotAngle)
+        pos = np.array([npx, py, npz])
+
+        # Update the robot's direction angle
+        angle += rotAngle
+        return pos, angle
+        
+    def step(self, action):
+        vel, angle = action
+
+        # Distance between the wheels
+        baseline = 0.102
+
+        # assuming same motor constants k for both motors
+        k_r = self.k
+        k_l = self.k
+
+        # print("{}, {}".format(type((self.gain + self.trim)),type(k_r)))
+
+        # adjusting k by gain and trim
+        k_r_inv = (self.gain + self.trim) / k_r
+        k_l_inv = (self.gain - self.trim) / k_l
+
+
+        omega_r = (vel + 0.5 * angle * baseline) / self.radius
+        omega_l = (vel - 0.5 * angle * baseline) / self.radius
+
+        # conversion from motor rotation rate to duty cycle
+        u_r = omega_r * k_r_inv
+        u_l = omega_l * k_l_inv
+
+        # limiting output to limit, which is 1.0 for the duckiebot
+        u_r_limited = max(min(u_r, self.limit), -self.limit)
+        u_l_limited = max(min(u_l, self.limit), -self.limit)
+
+        vels = np.array([u_l_limited, u_r_limited])
+
+        self.update_physics(vels)
+    
+    def get_dir_vec(self, cur_angle):
+        """
+        Vector pointing in the direction the agent is looking
+        """
+
+        x = math.cos(cur_angle)
+        z = -math.sin(cur_angle)
+        return np.array([x, 0, z])
+
+
+    def get_right_vec(self, angle=None):
+        """
+        Vector pointing to the right of the agent
+        """
+        if angle == None:
+            angle = self.cur_angle
+
+        x = math.sin(angle)
+        z = math.cos(angle)
+        return np.array([x, 0, z])
+
+    def rotate_point(self, px, py, cx, cy, theta):
+        """
+        Rotate a 2D point around a center
+        """
+
+        dx = px - cx
+        dy = py - cy
+
+        new_dx = dx * math.cos(theta) + dy * math.sin(theta)
+        new_dy = dy * math.cos(theta) - dx * math.sin(theta)
+
+        return cx + new_dx, cy + new_dy
