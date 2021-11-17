@@ -1,5 +1,6 @@
 from .learner import NeuralNetworkPolicy
 from .lane_detection import *
+from .planner import MapGrid, BFS
 import math
 
 REF_VELOCITY = 0.5
@@ -28,12 +29,14 @@ class Policy(NeuralNetworkPolicy):
 
     
     """
-    def __init__(self, path, goal_tile, grid, *args, **kwargs):
+    def __init__(self, goal_tile, grid, start_pos,*args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.path = path
+        # self.path = path
         self.goal_tile = goal_tile
+        self.start_pos = start_pos
         self.reached_goal = False
         self.grid=grid
+        self.pose=None
 
         # Current, previous tiles, and previous action
         self.prev_tile = None
@@ -63,6 +66,15 @@ class Policy(NeuralNetworkPolicy):
         self.k = 27.0
         self.limit = 1.0
 
+        # Current path
+        self.path=None
+
+        # First relative pose after initial adjustment
+        self.initial_pose=None
+
+        # Current Action
+        self.current_action=None
+
     def predict(self, obs, cur_pos=None):
         if cur_pos is None:
             return 0, 0
@@ -71,37 +83,32 @@ class Policy(NeuralNetworkPolicy):
         if self.cur_tile == self.goal_tile:
             self.reached_goal = True
             return 0, 0
-
         prev_prev_act=self.prev_act
-        # Just started - use NN
+
+        # GET ACTION
+        # Just started - adjust first
         if self.prev_tile is None:
             # initialise prev_tiles
             self.prev_tile = self.cur_tile
             self.prev_tile_step = self.cur_tile
-            self.prev_act = super().predict(obs)
-        # Adjusting angle - rotate
-        elif not self.adjust_done:
-            self.prev_act = self.adjust_face()
-        # Going straight - use NN
-        elif not self.is_turning():
-            self.prev_act = super().predict(obs)
-        # Turning - predetermined action
-        else:
-            self.prev_act = self.get_turn_act()
-        
+            self.adjust_done=False
+            return self.predict(obs, cur_pos)
 
+        # LOCALIZATION
+        # Get relative pose w.r.t lane
+        self.pose=get_pose(obs,True)
 
+        # Relative localization in turn
         if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
             # pose w.r.t to center of right lane
             # print("================")
-            pose=get_pose(obs,True)
-            if pose is not None:
-                print("angle:{}, displacement:{}".format(*pose))
+            if self.pose is not None:
+                print("angle:{}, displacement:{}".format(*self.pose))
                 # input()
 
         # Entered new tile
         if self.prev_tile_step != self.cur_tile:
-            pose=get_pose(obs,True)
+
             # Update previous tiles
             self.prev_tile = self.prev_tile_step
             self.prev_tile_step = self.cur_tile
@@ -112,23 +119,25 @@ class Policy(NeuralNetworkPolicy):
             # Reset any turning counters
             self.turn_step = 0
 
-            # Facing wrong direction - Rotate 180 degrees
-            if self.to_adjust():
-                self.adjust_done = False
+            # Localize rough pose
+            rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)            
+            rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
+            rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
 
-            #Localization w.r.t center of right lane only if going straight
-            pose=get_pose(obs,True)
-            # print("pose:{},{}".format(*pose))
-            # print("{},{},{}".format(self.prev_tile, self.prev_tile_step,self.cur_tile))
-            # print("turning:{}".format(self.is_turning()))
+
+            # Determine current action
+            # Check if tile is in plan, if not re-plan and follow new path
+            if self.path is None or not (*self.cur_tile,self.face) in self.path:
+                self.path=self.get_path(self.goal_tile, (rough_y,rough_x,rough_orientation))
+                # print(self.path)
+            # print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
+            self.current_action=self.path[(cur_pos[0],cur_pos[1] ,rough_orientation)]
+
+            # Localization after reaching FIRST new tile using actions
+            # print("PREVIOUS TILE:{}".format(self.prev_tile))
             # input()
-            if pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
-                orientation, displacement=pose
-                rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)
-
-                # Localize position
-                rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
-                rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
+            if self.prev_tile == self.start_pos:
+                orientation, displacement = self.orientation, 0.75-self.y
 
                 if rough_orientation==0:
                     self.x=rough_x
@@ -152,18 +161,64 @@ class Policy(NeuralNetworkPolicy):
                 print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
                 print("================")
                 # input()
-                
 
-        else:
-            # Localize based on actions since last localization
-            # This localization does not start until the first tile is reached
-            if None not in (self.x, self.y,self.orientation):
-                self.step(np.array(prev_prev_act))
+
+            # Localization w.r.t center of right lane only if going straight
+            elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+                orientation, displacement=self.pose
+
+                if rough_orientation==0:
+                    self.x=rough_x
+                    self.y=rough_y+0.75-displacement
+                elif rough_orientation==1:
+                    self.x=rough_x+0.75-displacement
+                    self.y=rough_y
+                elif rough_orientation==2:
+                    self.x=rough_x
+                    self.y=rough_y+0.25+displacement
+                elif rough_orientation==3:
+                    self.x=rough_x+0.25+displacement
+                    self.y=rough_y
+                else:
+                    print("invalid orientation")
+
+                # Localize orientation
+                self.orientation=(rough_orientation*np.pi/2)+orientation
 
                 print("================")
                 print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
                 print("================")
+            # input()
+        else:
+            # If localization fails for in junction and turns
+            # Localize based on actions since last localization
+            if None not in (self.x, self.y,self.orientation):
+                self.step(np.array(prev_prev_act))
+                print("================")
+                # After initial adjustment done while still in the starting tile
+                if cur_pos==self.start_pos and self.adjust_done:
+                    print("Initial tile localization")
+
+                print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+                print("================")
                 #input()
+
+
+        print("CURRENT ACTION: {}".format(self.current_action))
+        # Robot still in initial tile and initial adjustment is completed
+        if self.cur_tile==self.start_pos and self.adjust_done:
+            self.prev_act = super().predict(obs)
+        # Adjusting angle - rotate
+        elif not self.adjust_done:
+            self.prev_act = self.adjust_face()
+        # Going straight - use NN
+        elif self.current_action==(1,0):
+            self.prev_act = super().predict(obs)
+        # Turning - predetermined action
+        elif self.current_action==(0,-1):
+            self.prev_act = self.get_turn_act("LEFT")
+        elif self.current_action==(0,1):
+            self.prev_act = self.get_turn_act("RIGHT")
 
         return self.prev_act
 
@@ -187,11 +242,11 @@ class Policy(NeuralNetworkPolicy):
             return 1
         return -1
 
-    def get_turn_act(self):
+    def get_turn_act(self, action):
         # New turn action
         if self.turn_step == 0:
             vel = REF_VELOCITY
-            ang = math.pi / 2 if self.is_turning() == 1 else -math.pi / 2
+            ang = math.pi / 2 if action == "LEFT" else -math.pi / 2
         # Continued turn action
         else:
             vel, ang = self.prev_act
@@ -254,19 +309,25 @@ class Policy(NeuralNetworkPolicy):
         Returns action to rotate, keeps track of # steps taken rotating
         0, math.pi / 2
         '''
-        dir_path = self.get_dir_path()
-        if self.face is None or dir_path is None:
-            return None, None
-        if self.face == dir_path:
-            return 0, 0
+        # dir_path = self.get_dir_path()
+        # if self.face is None or dir_path is None:
+        #     return None, None
+        # if self.face == dir_path:
+        #     return 0, 0
         self.adj_step += 1
 
-        print(self.adj_step, ADJ_STEPS)
-        self.adjust_done = self.adj_step >= ADJ_STEPS
-        
+        # print(self.adj_step, ADJ_STEPS)
+        if self.pose is not None:
+            orientation, displacement = self.pose
+            self.adjust_done = orientation>-0.2 and orientation<0.1 # turn until relatively straight to a lane
+
+        # After adjustment, localize in hypothetical tile to monitor displacement within tile
         if self.adjust_done:
             self.adj_step = 0
-
+            orientation, displacement = self.pose
+            self.x, self.y, self.orientation = 0, 0.75-displacement, orientation
+            # input()
+            return 0,0
         return 0, math.pi / 2
 
     def to_adjust(self):
@@ -275,7 +336,7 @@ class Policy(NeuralNetworkPolicy):
         '''
         if self.face is None:
             return False
-        dir_path = self.get_dir_path()
+        # dir_path = self.get_dir_path()
         self.turn_delta = (dir_path - self.face) % 4
         return self.turn_delta == 2
 
@@ -314,7 +375,7 @@ class Policy(NeuralNetworkPolicy):
 
         # If the wheel velocities are the same, then there is no rotation
         if Vl == Vr:
-            pos = pos + deltaTime * Vl * get_dir_vec(angle)
+            pos = pos + deltaTime * Vl * self.get_dir_vec(angle)
             return pos, angle
 
         # Compute the angular rotation velocity about the ICC (center of curvature)
@@ -393,3 +454,19 @@ class Policy(NeuralNetworkPolicy):
         new_dy = dy * math.cos(theta) - dx * math.sin(theta)
 
         return cx + new_dx, cy + new_dy
+
+    def get_dir_vec(self, angle=None):
+        """
+        Vector pointing in the direction the agent is looking
+        """
+        if angle == None:
+            angle = self.cur_angle
+
+        x = math.cos(angle)
+        z = -math.sin(angle)
+        return np.array([x, 0, z])
+
+    def get_path(self,goal, start_pose):
+        planner = BFS(goal, start_pose, self.grid.get_grid())
+        path = planner.search()
+        return path
