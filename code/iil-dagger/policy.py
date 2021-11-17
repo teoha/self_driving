@@ -4,9 +4,9 @@ from .planner import MapGrid, BFS
 import math
 
 REF_VELOCITY = 0.5
-ADJ_STEPS = 40
+ADJ_STEPS = 45
 ANGLE_THRESHOLD = 0.1
-ANGLE_DECAY = math.pi / 120
+ANGLE_DECAY = math.pi / 100
 PERIOD=0.05
 
 class Policy(NeuralNetworkPolicy):
@@ -189,19 +189,19 @@ class Policy(NeuralNetworkPolicy):
                 print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
                 print("================")
             # input()
-        else:
+        elif None not in (self.x, self.y,self.orientation):
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
-            if None not in (self.x, self.y,self.orientation):
-                self.step(np.array(prev_prev_act))
-                print("================")
-                # After initial adjustment done while still in the starting tile
-                if cur_pos==self.start_pos and self.adjust_done:
-                    print("Initial tile localization")
+            
+            self.step(np.array(prev_prev_act))
+            print("================")
+            # After initial adjustment done while still in the starting tile
+            if cur_pos==self.start_pos and self.adjust_done:
+                print("Initial tile localization")
 
-                print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-                print("================")
-                #input()
+            print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+            print("================")
+            #input()
 
 
         print("CURRENT ACTION: {}".format(self.current_action))
@@ -221,6 +221,46 @@ class Policy(NeuralNetworkPolicy):
             self.prev_act = self.get_turn_act("RIGHT")
 
         return self.prev_act
+
+    def localize(self, obs):
+        #Localization w.r.t center of right lane only if going straight
+        pose=get_pose(obs)
+        # print("pose:{},{}".format(*pose))
+        # print("{},{},{}".format(self.prev_tile, self.prev_tile_step,self.cur_tile))
+        # print("turning:{}".format(self.is_turning()))
+        # input()
+        # if pose is not None and self.is_turning()==0:
+        # input()
+        if pose is None or self.is_turning(): return
+        # if pose is not None and self.prev_tile != self.cur_tile:
+        orientation, displacement=pose
+        rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)
+
+        # Localize position
+        rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
+        rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
+
+        if rough_orientation==0:
+            self.x=rough_x
+            self.y=rough_y+0.75-displacement
+        elif rough_orientation==1:
+            self.x=rough_x+0.75-displacement
+            self.y=rough_y
+        elif rough_orientation==2:
+            self.x=rough_x
+            self.y=rough_y+0.25+displacement
+        elif rough_orientation==3:
+            self.x=rough_x+0.25+displacement
+            self.y=rough_y
+        else:
+            print("invalid orientation")
+
+        # Localize orientation
+        self.orientation=(rough_orientation*np.pi/2)+orientation
+
+        print("================")
+        print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+        print("================")
 
     def is_turning(self):
         '''
@@ -253,6 +293,12 @@ class Policy(NeuralNetworkPolicy):
 
         self.turn_step += 1
 
+        need_correction = self.need_correction()
+
+        if need_correction == 0:
+            vel = 0.7
+            ang = 0
+    
         # Decay angle turned over time
         if ang < 0:
             ang += ANGLE_DECAY
@@ -262,13 +308,6 @@ class Policy(NeuralNetworkPolicy):
             ang = max(ang, 0)
 
         return vel, ang
-
-
-    def right(self):
-        return REF_VELOCITY, -math.pi / 2
-
-    def left(self):
-        return REF_VELOCITY, math.pi / 2
 
     def get_dir_next_tile(self, t1, t2):
         i, j = t1
@@ -347,6 +386,67 @@ class Policy(NeuralNetworkPolicy):
 
     #     return new_x, new_y, new_theta
 
+    def get_next_tile_exact(self):
+        '''
+        get exact coordinates for center of lane of next tile
+        '''
+        if self.cur_tile is None:
+            return None
+        next_tile = self.path[self.cur_tile]
+
+        x, y = next_tile
+        
+        if next_tile == self.goal_tile:
+            return (x + 0.5, y + 0.5)
+        
+        d_path = self.get_dir_path()
+
+        if d_path == 0:
+            return x + 1, y + 0.75
+        elif d_path == 1:
+            return x + 0.75, y
+        elif d_path == 2:
+            return x, y + 0.25
+        else:
+            return x + 0.25, y + 1
+
+
+    def get_ideal_angle(self):
+        if None in (self.x, self.y, self.orientation):
+            return None
+        nx, ny = self.get_next_tile_exact()
+        cx, cy = self.x, self.y
+        dx = nx - cx
+        dy = cy - ny
+        ang = math.atan(dy / dx)
+        # Adjust from 1st/4th quad to 3rd/2nd quad
+        if dx < 0:
+            ang += math.pi
+        # print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
+        return ang % (2 * math.pi)
+
+
+    def need_correction(self):
+        '''
+        Returns if correction needed comparing ideal angle and cur_angle
+        0, 1, -1: not needed, clockwise turning, anti clockwise turning
+        '''
+        ideal_angle = self.get_ideal_angle()
+        cur_angle = self.orientation
+        if ideal_angle is None or cur_angle is None:
+            return None
+        cur_angle %= 2 * math.pi
+        d_angle = (ideal_angle - cur_angle) % (2 * math.pi)
+        print(f'ideal_angle={ideal_angle},cur_angle={cur_angle}, d_angle={d_angle}')
+        if abs(d_angle) < ANGLE_THRESHOLD:
+            return 0
+        # clockwise
+        if d_angle < math.pi:
+            return 1
+        # anti-clockwise
+        return -1
+        
+        
     def update_physics(self, action, delta_time=None):
         if delta_time is None:
             delta_time = 1/30
@@ -398,6 +498,7 @@ class Policy(NeuralNetworkPolicy):
         # Update the robot's direction angle
         angle += rotAngle
         return pos, angle
+        
     def step(self, action):
         vel, angle = action
 
@@ -429,6 +530,15 @@ class Policy(NeuralNetworkPolicy):
         vels = np.array([u_l_limited, u_r_limited])
 
         self.update_physics(vels)
+    
+    def get_dir_vec(self, cur_angle):
+        """
+        Vector pointing in the direction the agent is looking
+        """
+
+        x = math.cos(cur_angle)
+        z = -math.sin(cur_angle)
+        return np.array([x, 0, z])
 
 
     def get_right_vec(self, angle=None):
