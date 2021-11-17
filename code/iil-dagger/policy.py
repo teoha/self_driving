@@ -1,6 +1,6 @@
 from .learner import NeuralNetworkPolicy
 from .lane_detection import *
-from .planner import MapGrid, BFS
+from .planner import MapGrid, BFS, get_next_pose
 import math
 
 REF_VELOCITY = 0.5
@@ -75,6 +75,9 @@ class Policy(NeuralNetworkPolicy):
         # Current Action
         self.current_action=None
 
+        # Last orientation
+        self.last_orientation=None
+
     def predict(self, obs, cur_pos=None):
         if cur_pos is None:
             return 0, 0
@@ -123,6 +126,7 @@ class Policy(NeuralNetworkPolicy):
             rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)            
             rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
             rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
+            self.last_orientation=rough_orientation
 
 
             # Determine current action
@@ -392,14 +396,19 @@ class Policy(NeuralNetworkPolicy):
         '''
         if self.cur_tile is None:
             return None
-        next_tile = self.path[self.cur_tile]
+        next_tile = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
 
-        x, y = next_tile
+        x, y, theta = next_tile
         
         if next_tile == self.goal_tile:
             return (x + 0.5, y + 0.5)
         
-        d_path = self.get_dir_path()
+        if self.current_action==(1,0):
+            d_path = 1
+        elif self.current_action==(0,-1):
+            d_path = 2
+        else:
+            d_path = 0
 
         if d_path == 0:
             return x + 1, y + 0.75

@@ -139,3 +139,18 @@ class Node:
 
     def __eq__(self, other):
         return self.position==other.position
+
+def get_next_pose(curr_pose, action):
+    x,y,theta=curr_pose
+
+    new_orientation=(theta-action[1])%4
+    if theta==0: #East
+        new_pose = x+action[0],y+action[1]
+    elif theta==1: #North
+        new_pose = x+action[1],y-action[0]
+    elif theta==2: #West
+        new_pose = x-action[0], y-action[1]
+    else: #South
+        new_pose = x-action[1], y+action[0]
+
+    return (*new_pose,new_orientation)
