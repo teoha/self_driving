@@ -358,11 +358,15 @@ class Policy(NeuralNetworkPolicy):
         # if self.face == dir_path:
         #     return 0, 0
         self.adj_step += 1
-
+        action=0, math.pi / 2
         # print(self.adj_step, ADJ_STEPS)
         if self.pose is not None:
             orientation, displacement = self.pose
             self.adjust_done = orientation>-0.2 and orientation<0.1 # turn until relatively straight to a lane
+            if orientation>0:
+                action=0, -math.pi / 2
+            else:
+                action=0, math.pi / 2
 
         # After adjustment, localize in hypothetical tile to monitor displacement within tile
         if self.adjust_done:
@@ -371,7 +375,9 @@ class Policy(NeuralNetworkPolicy):
             self.x, self.y, self.orientation = 0, 0.75-displacement, orientation
             # input()
             return 0,0
-        return 0, math.pi / 2
+
+
+        return action
 
     def to_adjust(self):
         '''
