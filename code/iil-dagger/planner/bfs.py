@@ -38,7 +38,7 @@ class BFS:
         """
 
         # print("GOAL:{}".format(self.goal))
-        start_node=Node(None,(self.start_pos[1],self.start_pos[0],self.start_pos[2]))
+        start_node=Node(None,(self.start_pos))
         start_node.g=start_node.h=start_node.f=0
         end_node=Node(None, (self.goal[0],self.goal[1], 0))
 

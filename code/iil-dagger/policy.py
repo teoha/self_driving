@@ -128,7 +128,7 @@ class Policy(NeuralNetworkPolicy):
             # Determine current action
             # Check if tile is in plan, if not re-plan and follow new path
             if self.path is None or not (*self.cur_tile,self.face) in self.path:
-                self.path=self.get_path(self.goal_tile, (rough_y,rough_x,rough_orientation))
+                self.path=self.get_path(self.goal_tile, (cur_pos[0],cur_pos[1],rough_orientation))
                 # print(self.path)
             # print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
             self.current_action=self.path[(cur_pos[0],cur_pos[1] ,rough_orientation)]
