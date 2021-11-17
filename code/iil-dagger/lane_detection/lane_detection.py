@@ -39,20 +39,20 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
-def get_yellow_lanes(obs, isTurn=False):
+def get_yellow_lanes(obs, isTurn=False, horizon=1/7):
     image=select_yellow(obs)
-    return get_lanes(image, isTurn)
+    return get_lanes(image, isTurn, horizon)
 
-def get_white_lanes(obs,isTurn=False):
+def get_white_lanes(obs,isTurn=False, horizon=1/7):
     image=select_white(obs)
-    return get_lanes(image, isTurn)
+    return get_lanes(image, isTurn, horizon)
 
-def get_lanes(image, isTurn=False):
+def get_lanes(image, isTurn=False, horizon=1/7):
     height,width,channels=image.shape
     region_of_interest_vertices = [
         (0, height),
         (0, height/2.3),
-        (width/2, height/7),
+        (width/2, height*horizon),
         (width, height/2.3),
         (width, height),
     ]
@@ -173,9 +173,9 @@ def get_raw_pose(line):
 
     return angle, abs(dist)
 
-def get_pose(obs, isTurn=False):
-    white_left, white_right = get_white_lanes(obs.copy(), isTurn)
-    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn)
+def get_pose(obs, isTurn=False, horizon=1/7):
+    white_left, white_right = get_white_lanes(obs.copy(), isTurn, horizon)
+    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn, horizon)
 
     if yellow_left is not None: # Use yellow center lane marker to localize first
         left_angle, left_dist=get_raw_pose(yellow_left)
@@ -196,7 +196,7 @@ def get_pose(obs, isTurn=False):
 
     return None
 
-def select_yellow(image, upper=50):
+def select_yellow(image, upper=30):
     converted = convert_hls(image)
     # yellow color mask
     lower = np.uint8([ 10,   0, 90])

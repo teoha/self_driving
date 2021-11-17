@@ -99,7 +99,7 @@ class Policy(NeuralNetworkPolicy):
 
         # LOCALIZATION
         # Get relative pose w.r.t lane
-        self.pose=get_pose(obs,True)
+        self.pose=get_pose(obs,True) if self.adjust_done else get_pose(obs,True)
 
         # Relative localization in turn
         if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
@@ -358,15 +358,14 @@ class Policy(NeuralNetworkPolicy):
         # if self.face == dir_path:
         #     return 0, 0
         self.adj_step += 1
-        action=0, math.pi / 2
+        threshold=1
+        action=self.prev_act if self.prev_act is not None else (0, math.pi / 2)
+
         # print(self.adj_step, ADJ_STEPS)
         if self.pose is not None:
             orientation, displacement = self.pose
-            self.adjust_done = orientation>-0.2 and orientation<0.1 # turn until relatively straight to a lane
-            if orientation>0:
-                action=0, -math.pi / 2
-            else:
-                action=0, math.pi / 2
+            self.adjust_done = orientation>-threshold and orientation<threshold # turn until relatively straight to a lane
+            action=0, math.pi / 2
 
         # After adjustment, localize in hypothetical tile to monitor displacement within tile
         if self.adjust_done:
