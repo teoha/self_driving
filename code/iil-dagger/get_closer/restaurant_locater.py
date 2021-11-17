@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 
+matrix, mask = cv2.findHomography(np.array([[558,132],[21,132],[446,105],[150,105]]), np.array([[-0.05,-0.25],[0.95,-0.25],[-0.05,-1.25],[0.95,-1.25]]), cv2.RANSAC, 5.0)
+
 class restaurant_localizer():
     def __init__(self, templateGrays):
         self.templateGrays
@@ -75,5 +77,24 @@ def find_duck(image, duck_template_grays):
         return None,None,None,None
     return startX,startY,endX,endY
 
+def get_restaurant_imageLoc(image, duck_template_grays):
+    startX,startY,endX,endY=find_duck(image, duck_template_grays)
+    if startX is None:
+        return None
+    duck_height=abs(endY-startY)
+    building_height=duck_height*291/110
+    restaurantX=(endX+startX)/2
+    restaurantY=startY+building_height
+    return restaurantX, restaurantY
 
+
+def get_locFromImg(image_coordinates):
+    pts=np.array([*image_coordinates])
+    pts1 = pts.reshape(-1,1,2).astype(np.float32)
+    return cv2.perspectiveTransform((pts1), matrix)[0][0]
+
+def get_restDisplacement(image_coordinates):
+    x,y = get_locFromImg(image_coordinates)
+    curr_pos=(0.5,-1)
+    return x-curr_pos[0], y-curr_pos[1]
 

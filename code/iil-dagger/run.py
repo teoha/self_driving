@@ -48,7 +48,7 @@ def get_path(map_img, goal, start_pos):
     path = planner.search()
     return path
 
-def get_policy(path, goal, args):
+def get_policy(goal, args, map_img, start_pos):
     model = Squeezenet()
     model.load_state_dict(torch.load('./pretrained/' + args.model + '.pt', map_location=torch.device('cpu')))
 
@@ -57,12 +57,13 @@ def get_policy(path, goal, args):
     input_shape = (40,80)
     dataset = MemoryMapDataset(25000, (3, *input_shape), (2,), "")
     policy = Policy(
-        path=path,
         goal_tile=goal,
         model=model,
         optimizer=policy_optimizer,
         storage_location="",
-        dataset = dataset
+        dataset = dataset,
+        grid=MapGrid(map_img),
+        start_pos=start_pos
     )
 
     return policy
@@ -93,12 +94,15 @@ def main():
     # Blue pixels indicate lan center
     # Each tile has size 100 x 100 pixels
     # Tile (0, 0) locates at left top corner.
-    cv2.imshow("map", map_img)
+    cv2.namedWindow("output", cv2.WINDOW_NORMAL)
+    map_img_clone = cv2.resize(map_img.copy(), (960, 540))  
+    cv2.imshow("map", map_img_clone)
     cv2.waitKey(200)
 
-    path = get_path(map_img, goal, start_pos)
+    # path = get_path(map_img, goal, start_pos)
 
-    policy = get_policy(path, goal, args)
+
+    policy = get_policy(goal, args, map_img, start_pos)
 
     obs, reward, done, info = env.step((0,0))
     curr_pos = info['curr_pos']
