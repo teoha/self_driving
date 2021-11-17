@@ -48,7 +48,7 @@ def get_path(map_img, goal, start_pos):
     path = planner.search()
     return path
 
-def get_policy(path, goal, args):
+def get_policy(path, goal, args, map_img):
     model = Squeezenet()
     model.load_state_dict(torch.load('./pretrained/' + args.model + '.pt', map_location=torch.device('cpu')))
 
@@ -62,7 +62,8 @@ def get_policy(path, goal, args):
         model=model,
         optimizer=policy_optimizer,
         storage_location="",
-        dataset = dataset
+        dataset = dataset,
+        grid=MapGrid(map_img)
     )
 
     return policy
@@ -98,7 +99,7 @@ def main():
 
     path = get_path(map_img, goal, start_pos)
 
-    policy = get_policy(path, goal, args)
+    policy = get_policy(path, goal, args, map_img)
 
     obs, reward, done, info = env.step((0,0))
     curr_pos = info['curr_pos']

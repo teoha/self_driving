@@ -39,15 +39,15 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
-def get_yellow_lanes(obs):
+def get_yellow_lanes(obs, isTurn=False):
     image=select_yellow(obs)
-    return get_lanes(image)
+    return get_lanes(image, isTurn)
 
-def get_white_lanes(obs):
+def get_white_lanes(obs,isTurn=False):
     image=select_white(obs)
-    return get_lanes(image)
+    return get_lanes(image, isTurn)
 
-def get_lanes(image):
+def get_lanes(image, isTurn=False):
     height,width,channels=image.shape
     region_of_interest_vertices = [
         (0, height),
@@ -71,7 +71,7 @@ def get_lanes(image):
         cropped_image,
         rho=6,
         theta=np.pi / 60,
-        threshold=160,
+        threshold=300,
         lines=np.array([]),
         minLineLength=40,
         maxLineGap=25
@@ -84,18 +84,35 @@ def get_lanes(image):
     left_line_y = []
     right_line_x = []
     right_line_y = []
-                        
-    for line in lines:
-        for x1, y1, x2, y2 in line:
-            slope = (y2 - y1) / (x2 - x1) # <-- Calculating the slope.
-            if math.fabs(slope) < 0.4: # <-- Only consider extreme slope
-                continue
-            if slope <= 0: # <-- If the slope is negative, left group.
-                left_line_x.extend([x1, x2])
-                left_line_y.extend([y1, y2])
-            else: # <-- Otherwise, right group.
-                right_line_x.extend([x1, x2])
-                right_line_y.extend([y1, y2])
+
+    if isTurn:
+        max_left_y=float('-inf')
+        max_right_y=float('-inf')
+        for line in lines:
+            for x1, y1, x2, y2 in line:
+                slope = (y2 - y1) / (x2 - x1) # <-- Calculating the slope.
+                if slope <= 0 and (y1 > max_left_y or y2 > max_left_y): # <-- If the slope is negative, left group.
+                    max_left_y=max(y1,y2)
+                    left_line_x=[x1, x2]
+                    left_line_y=[y1, y2]
+                elif slope >0 and (y1 > max_right_y or y2 > max_right_y): # <-- Otherwise, right group.
+                    max_right_y=max(y1,y2)
+                    right_line_x=[x1, x2]
+                    right_line_y=[y1, y2]
+    else:                        
+        for line in lines:
+            for x1, y1, x2, y2 in line:
+                slope = (y2 - y1) / (x2 - x1) # <-- Calculating the slope.
+                if math.fabs(slope) < 0.4: # <-- Only consider extreme slope
+                    continue
+                if slope <= 0: # <-- If the slope is negative, left group.
+                    left_line_x.extend([x1, x2])
+                    left_line_y.extend([y1, y2])
+                else: # <-- Otherwise, right group.
+                    right_line_x.extend([x1, x2])
+                    right_line_y.extend([y1, y2])
+
+
     min_y = int(image.shape[0] * (1 / 7)) # <-- Just below the horizon
     max_y = int(image.shape[0]) # <-- The bottom of the image
     fitted_lines=[]
@@ -124,17 +141,17 @@ def get_lanes(image):
         right_line=[right_x_start, max_y, right_x_end, min_y]
         fitted_lines.append([right_x_start, max_y, right_x_end, min_y])
 
-        # q=input()
-        # if q=='l':
-        #     ## Code to display lane lines
-        #     line_image = draw_lines(
-        #         image,
-        #         [fitted_lines],
-        #         thickness=5
-        #     )
-        #     plt.figure()
-        #     plt.imshow(line_image)
-        #     plt.show()
+    # q=input()
+    # if q=='l':
+    #     ## Code to display lane lines
+    #     line_image = draw_lines(
+    #         image,
+    #         [fitted_lines],
+    #         thickness=5
+    #     )
+    #     plt.figure()
+    #     plt.imshow(line_image)
+    #     plt.show()
 
     return left_line, right_line
 
@@ -156,9 +173,9 @@ def get_raw_pose(line):
 
     return angle, abs(dist)
 
-def get_pose(obs):
-    white_left, white_right = get_white_lanes(obs.copy())
-    yellow_left, yellow_right = get_yellow_lanes(obs.copy())
+def get_pose(obs, isTurn=False):
+    white_left, white_right = get_white_lanes(obs.copy(), isTurn)
+    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn)
 
     if yellow_left is not None: # Use yellow center lane marker to localize first
         left_angle, left_dist=get_raw_pose(yellow_left)
@@ -179,11 +196,11 @@ def get_pose(obs):
 
     return None
 
-def select_yellow(image):
+def select_yellow(image, upper=50):
     converted = convert_hls(image)
     # yellow color mask
     lower = np.uint8([ 10,   0, 90])
-    upper = np.uint8([ 50, 255, 255])
+    upper = np.uint8([ upper, 255, 255])
     yellow_mask = cv2.inRange(converted, lower, upper)
     return cv2.bitwise_and(image, image, mask = yellow_mask)
 
@@ -197,3 +214,4 @@ def select_white(image):
     return cv2.bitwise_and(image, image, mask = white_mask)
 def convert_hls(image):
     return cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+
