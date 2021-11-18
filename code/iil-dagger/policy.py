@@ -172,8 +172,8 @@ class Policy(NeuralNetworkPolicy):
 
 
             # Localization w.r.t center of right lane only if going straight
-            # elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
-            elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
+            elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+            # elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
                 
                 orientation, displacement=self.pose
 
@@ -235,6 +235,7 @@ class Policy(NeuralNetworkPolicy):
             self.prev_act = self.adjust_face()
         # Going straight - use NN
         elif self.current_action==(1,0) and not self.is_facing_jn():
+        # elif self.current_action==(1,0) and not self.grid.is_junction(*cur_pos[::-1]):
             self.prev_act = super().predict(obs)
         else:
             self.prev_act = self.get_turn_act()
@@ -246,8 +247,10 @@ class Policy(NeuralNetworkPolicy):
         if self.grid.is_junction(cy, cx):
             return True
 
-        nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
-        return self.grid.is_junction(ny, nx) or self.grid.is_turn(ny, nx)
+        return abs(self.need_correction()) > ANGLE_THRESHOLD
+
+        # nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
+        # return self.grid.is_junction(ny, nx) #or self.grid.is_turn(ny, nx)
 
     def localize(self, obs):
         #Localization w.r.t center of right lane only if going straight
@@ -322,9 +325,9 @@ class Policy(NeuralNetworkPolicy):
 
         need_correction = self.need_correction() * 2
 
-        if need_correction == 0:
+        # Faster if going straight
+        if abs(need_correction) < ANGLE_THRESHOLD:
             vel = 0.7
-            ang = 0
         elif need_correction > 0:
             ang = min(need_correction, math.pi / 2)
         elif need_correction < 0:
@@ -619,3 +622,4 @@ class Policy(NeuralNetworkPolicy):
         planner = BFS(goal, start_pose, self.grid.get_grid())
         path = planner.search()
         return path
+        
