@@ -69,7 +69,7 @@ class Policy(NeuralNetworkPolicy):
         # Current path
         self.path=None
 
-        # First relative pose after initial adjustment
+        # First relative pose before adjustment
         self.initial_pose=None
 
         # Current Action
@@ -77,6 +77,11 @@ class Policy(NeuralNetworkPolicy):
 
         # Last orientation
         self.last_orientation=None
+
+        # Angle to adjust
+        self.adj_angle=None
+        self.adj_action=None
+        self.adj_steps_req=None
 
     def predict(self, obs, cur_pos=None):
         if cur_pos is None:
@@ -361,25 +366,38 @@ class Policy(NeuralNetworkPolicy):
         #     return None, None
         # if self.face == dir_path:
         #     return 0, 0
-        self.adj_step += 1
+        
         threshold=1
-        action=self.prev_act if self.prev_act is not None else (0, math.pi / 2)
+        action=self.adj_action if self.adj_action is not None else (0, math.pi / 2)
 
-        # print(self.adj_step, ADJ_STEPS)
-        if self.pose is not None:
+        # Record first instance of detecting lane and the orientation from localizing
+        if self.pose is not None and self.adj_angle is None:
             orientation, displacement = self.pose
-            self.adjust_done = orientation>-threshold and orientation<threshold # turn until relatively straight to a lane
-            action=0, math.pi / 2
+            self.initial_pose=self.pose
+            self.adj_angle=-orientation
+            self.adj_steps_req=abs(orientation)/0.07054
+            # action = 0, self.adj_angle
+            self.adj_step += 1
+            self.adj_action=(0, math.pi/2) if self.adj_angle>0 else (0, -math.pi/2)
+            # self.adjust_done = orientation>-threshold and orientation<threshold # turn until relatively straight to a lane
+            action=self.adj_action
+        elif self.adj_angle is not None:
+            # action = 0, self.adj_angle
+            self.adj_step += 1
+
+        if self.adj_steps_req is not None:
+            self.adjust_done=self.adj_step>=self.adj_steps_req
 
         # After adjustment, localize in hypothetical tile to monitor displacement within tile
         if self.adjust_done:
             self.adj_step = 0
-            orientation, displacement = self.pose
-            print("OD:{},{}".format(*self.pose))
-            self.x, self.y, self.orientation = 0, 0.75-displacement, orientation
+            orientation, displacement = self.initial_pose
+            # print("OD:{},{}".format(*self.pose))
+            self.x, self.y, self.orientation = 0, 0.75-displacement, orientation+self.adj_angle
+            self.adj_angle=None
             # input()
             return 0,0
-
+        print("init action:{}".format(action))
 
         return action
 
