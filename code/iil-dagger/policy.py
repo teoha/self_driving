@@ -140,7 +140,7 @@ class Policy(NeuralNetworkPolicy):
             self.turn_step = 0
             self.localize_tile_change()
 
-        elif None not in (self.x, self.y,self.orientation):
+        elif None not in (self.x, self.y,self.orientation) and prev_prev_act is not None:
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
             self.step(np.array(prev_prev_act))
@@ -189,6 +189,9 @@ class Policy(NeuralNetworkPolicy):
             self.path=self.get_path(self.goal_tile, (*self.cur_tile,rough_orientation))
         self.current_action=self.path[(*self.cur_tile ,rough_orientation)]
 
+        nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
+        face_trouble = self.grid.is_turn(ny, nx)
+
         # Localization after reaching FIRST new tile using actions
         if self.prev_tile == self.start_pos:
             orientation, displacement = self.orientation, 0.75-self.y
@@ -218,7 +221,8 @@ class Policy(NeuralNetworkPolicy):
 
 
         # Localization w.r.t center of right lane only if going straight
-        elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+        # elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+        elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]) and not face_turn:
         # elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
             
             orientation, displacement=self.pose
@@ -273,7 +277,7 @@ class Policy(NeuralNetworkPolicy):
         # New turn action
         if self.turn_step == 0:
             vel = REF_VELOCITY
-            ang = self.current_action[1] * math.pi / 2
+            ang = -self.current_action[1] * math.pi / 2
         # Continued turn action
         else:
             vel, ang = self.prev_act
@@ -318,6 +322,14 @@ class Policy(NeuralNetworkPolicy):
         else:
             return None
         return d
+
+    def update_face(self):
+        '''
+        Update direction faced
+        0, 1, 2, 3: Right, Up, Left, Down
+        '''
+        self.face = self.get_dir_next_tile(self.prev_tile, self.cur_tile)
+        return self.face
 
     def adjust_face(self):
         '''
@@ -369,7 +381,7 @@ class Policy(NeuralNetworkPolicy):
             return (x + 0.5, y + 0.5)
         
         d_path = self.get_dir_next_tile(self.cur_tile, (x,y))
-
+        print(x, y, d_path)
         if d_path == 0:
             return x + 1, y + 0.75
         elif d_path == 1:
