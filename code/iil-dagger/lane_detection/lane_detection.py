@@ -169,28 +169,36 @@ def get_raw_pose(line):
     A = np.vstack([x_coords,np.ones(len(x_coords))]).T
     m, c = np.linalg.lstsq(A, y_coords)[0]
     intersection_y=m*0.5+c
-    dist=intersection_y*np.sin(angle)
+    dist=(intersection_y-1)*np.sin(angle)
 
-    return angle, abs(dist)
+    return abs(angle), abs(dist)
 
 def get_pose(obs, isTurn=False, horizon=1/7):
     white_left, white_right = get_white_lanes(obs.copy(), isTurn, horizon)
     yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn, horizon)
 
     if yellow_left is not None: # Use yellow center lane marker to localize first
+        print("left, yellow")
+        # input()
         left_angle, left_dist=get_raw_pose(yellow_left)
         left_dist_from_center=0.25-left_dist
         return left_angle, left_dist_from_center
     if white_right is not None: # if yellow marker cannot be found, use white lane marker
+        print("right, white")
+        # input()
         right_angle, right_dist=get_raw_pose(white_right)
-        print("right angle:{}, right distance:{}".format(right_angle,right_dist))
+        # print("right angle:{}, right distance:{}".format(right_angle,right_dist))
         right_dist_from_center=right_dist-0.25
-        return right_angle, right_dist_from_center
+        return -right_angle, right_dist_from_center
     if yellow_right is not None: # use yellow marker on the right to localize
+        print("yellow, right")
+        # input()
         right_angle, right_dist=get_raw_pose(yellow_right)
         right_dist_from_center=right_dist+0.25
-        return right_angle, right_dist_from_center
+        return -right_angle, right_dist_from_center
     if white_left is not None: # Use white right lane marker to localize
+        print("left, white")
+        # input()
         left_angle, left_dist=get_raw_pose(white_left)
         left_dist_from_center=0.75-left_dist
         return left_angle, left_dist_from_center

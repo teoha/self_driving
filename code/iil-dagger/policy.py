@@ -99,15 +99,18 @@ class Policy(NeuralNetworkPolicy):
 
         # LOCALIZATION
         # Get relative pose w.r.t lane
-        self.pose=get_pose(obs,True) if self.adjust_done else get_pose(obs,True)
+        self.pose=get_pose(obs,True) if self.adjust_done else get_pose(obs,True,1/2.3)
+
+        if self.pose is not None:
+            print("angle:{}, displacement:{}".format(*self.pose))
 
         # Relative localization in turn
-        if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
+        # if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
             # pose w.r.t to center of right lane
             # print("================")
-            if self.pose is not None:
-                print("angle:{}, displacement:{}".format(*self.pose))
-                # input()
+            # if self.pose is not None:
+            #     print("angle:{}, displacement:{}".format(*self.pose))
+            #     # input()
 
         # Entered new tile
         if self.prev_tile_step != self.cur_tile:
@@ -134,7 +137,7 @@ class Policy(NeuralNetworkPolicy):
             if self.path is None or not (*self.cur_tile,self.face) in self.path:
                 self.path=self.get_path(self.goal_tile, (cur_pos[0],cur_pos[1],rough_orientation))
                 # print(self.path)
-            print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
+            # print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
             self.current_action=self.path[(cur_pos[0],cur_pos[1] ,rough_orientation)]
 
             # Localization after reaching FIRST new tile using actions
@@ -142,7 +145,7 @@ class Policy(NeuralNetworkPolicy):
             # input()
             if self.prev_tile == self.start_pos:
                 orientation, displacement = self.orientation, 0.75-self.y
-                print("displacement:{}, orientation:{}".format(displacement,orientation))
+                # print("displacement:{}, orientation:{}".format(displacement,orientation))
 
                 if rough_orientation==0:
                     self.x=rough_x
