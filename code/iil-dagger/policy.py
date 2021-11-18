@@ -104,10 +104,19 @@ class Policy(NeuralNetworkPolicy):
 
         # LOCALIZATION
         # Get relative pose w.r.t lane
-        self.pose=get_pose(obs,True) if self.adjust_done else get_pose(obs,True,1/2.3)
+        if not self.adjust_done:
+            self.pose=get_pose(obs,True,1/3, 50, 100)
+        elif self.cur_tile==self.start_pos and self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
+            self.pose=get_pose(obs,True,1/2.3, 50, 100)
+        else:
+            self.pose=get_pose(obs,True)
 
         if self.pose is not None:
+            orientation, displacement = self.pose
             print("angle:{}, displacement:{}".format(*self.pose))
+            if self.cur_tile==self.start_pos and self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
+                print("RESET")
+                self.x, self.y, self.orientation = 0, 0.75-displacement, orientation
 
         # Relative localization in turn
         # if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
@@ -143,14 +152,17 @@ class Policy(NeuralNetworkPolicy):
 
             print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
             print("================")
-            #input()
+            # input()
 
         print("CURRENT ACTION: {}".format(self.current_action))
         
         # DETERMINE ACTION
         # Robot still in initial tile and initial adjustment is completed
         if self.cur_tile==self.start_pos and self.adjust_done:
-            self.prev_act = super().predict(obs)
+            if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
+                self.prev_act=0.4, -self.pose[0]*2
+            else:
+                self.prev_act = super().predict(obs)
         # Adjusting angle - rotate
         elif not self.adjust_done:
             self.prev_act = self.adjust_face()

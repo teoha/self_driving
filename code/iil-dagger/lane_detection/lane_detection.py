@@ -39,20 +39,20 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
-def get_yellow_lanes(obs, isTurn=False, horizon=1/7):
+def get_yellow_lanes(obs, isTurn=False, horizon=1/7, houghTreshold=300):
     image=select_yellow(obs)
-    return get_lanes(image, isTurn, horizon)
+    return get_lanes(image, isTurn, houghTreshold)
 
-def get_white_lanes(obs,isTurn=False, horizon=1/7):
+def get_white_lanes(obs,isTurn=False, horizon=1/7, houghTreshold=300, white_treshold=168):
     image=select_white(obs)
-    return get_lanes(image, isTurn, horizon)
+    return get_lanes(image, isTurn, houghTreshold)
 
-def get_lanes(image, isTurn=False, horizon=1/7):
+def get_lanes(image, isTurn=False, horizon=1/7, houghTreshold=300):
     height,width,channels=image.shape
     region_of_interest_vertices = [
         (0, height),
         (0, height/2.3),
-        (width/2, height*horizon),
+        (width/2, height/horizon),
         (width, height/2.3),
         (width, height),
     ]
@@ -66,14 +66,19 @@ def get_lanes(image, isTurn=False, horizon=1/7):
         np.array([region_of_interest_vertices], np.int32)
     )
 
+    # plt.imshow(cannyed_image)
+    # plt.show()
+    # plt.imshow(cropped_image)
+    # plt.show()
+
 
     lines = cv2.HoughLinesP(
         cropped_image,
         rho=6,
         theta=np.pi / 60,
-        threshold=300,
+        threshold=houghTreshold,
         lines=np.array([]),
-        minLineLength=200,
+        minLineLength=40,
         maxLineGap=25
     )
 
@@ -173,9 +178,9 @@ def get_raw_pose(line):
 
     return abs(angle), abs(dist)
 
-def get_pose(obs, isTurn=False, horizon=1/7):
-    white_left, white_right = get_white_lanes(obs.copy(), isTurn, horizon)
-    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn, horizon)
+def get_pose(obs, isTurn=False, horizon=1/7, houghTreshold=300, white_treshold=168):
+    white_left, white_right = get_white_lanes(obs.copy(), isTurn, horizon, houghTreshold, white_treshold)
+    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn, horizon, houghTreshold)
 
     if yellow_left is not None: # Use yellow center lane marker to localize first
         print("left, yellow")
@@ -213,10 +218,10 @@ def select_yellow(image, upper=30):
     yellow_mask = cv2.inRange(converted, lower, upper)
     return cv2.bitwise_and(image, image, mask = yellow_mask)
 
-def select_white(image):
+def select_white(image, white_treshold=168):
     converted = convert_hls(image)
     # white color mask
-    lower = np.uint8([  0, 168,   0])
+    lower = np.uint8([  0, white_treshold,   0])
     upper = np.uint8([255, 255, 255])
     white_mask = cv2.inRange(converted, lower, upper)
 
