@@ -1,17 +1,7 @@
 import argparse
-
-from PIL import Image
 import cv2
 import numpy as np
-import torch
 from gym_duckietown.envs import DuckietownEnv
-
-from .planner import MapGrid, BFS
-from .model import Squeezenet
-
-from .utils import MemoryMapDataset
-from . import Policy
-
 
 def get_config():
     # declare the arguments
@@ -25,7 +15,6 @@ def get_config():
     parser.add_argument('--seed', '-s', default=2, type=int)
     parser.add_argument('--start-tile', '-st', default="1,1", type=str, help="two numbers separated by a comma")
     parser.add_argument('--goal-tile', '-gt', default="3,3", type=str, help="two numbers separated by a comma")
-    parser.add_argument('--model', '-d', default="model_map1_0bw", type=str)
     args = parser.parse_args()
     return args
 
@@ -40,45 +29,6 @@ def launch_env(args):
         randomize_maps_on_reset=False
     )
     return env
-
-def get_path(map_img, goal, start_pos):
-    grid = MapGrid(map_img)
-    planner = BFS(goal, start_pos, grid.get_grid())
-    path = planner.search()
-    return path
-
-def get_policy(goal, args, map_img, start_pos):
-    model = Squeezenet()
-    model.load_state_dict(torch.load('./pretrained/' + args.model + '.pt', map_location=torch.device('cpu')))
-
-    policy_optimizer = torch.optim.Adam(model.parameters())
-
-    input_shape = (40,80)
-    dataset = MemoryMapDataset(25000, (3, *input_shape), (2,), "")
-    policy = Policy(
-        goal_tile=goal,
-        model=model,
-        optimizer=policy_optimizer,
-        storage_location="",
-        dataset = dataset,
-        grid=MapGrid(map_img),
-        start_pos=start_pos
-    )
-
-    return policy
-
-# def preprocess_observation(observation):
-#     img = Image.fromarray(observation)
-#     img = img.resize((80, 60))
-#     img = img.crop((0, 20, 80, 60))
-#     thresh = 80
-#     fn = lambda x : 255 if x > thresh else 0
-#     img = img.convert('L')
-#     img = img.point(fn, mode='1')
-#     img = img.convert('RGB')
-#     obs = np.array(img)
-    
-#     return obs
 
 def main():
     args = get_config()
@@ -101,33 +51,19 @@ def main():
     # path = get_path(map_img, goal, start_pos)
 
 
-    policy = get_policy(goal, args, map_img, start_pos)
+    actions = np.loadtxt(f'../control_files/{args.map_name}_seed{args.seed}_start_{args.start_tile}_goal_{args.goal_tile}.txt', delimiter=',')
 
     obs, reward, done, info = env.step((0,0))
     curr_pos = info['curr_pos']
 
-    actions = []
-
-    for i in range(10000):
-        action = policy.predict(obs, curr_pos)
-        try:
-            action = action.numpy()
-        except AttributeError:
-            pass
-        # print(f'action={action}')
-        actions.append(action)
-        obs, reward, done, info = env.step(action)
+    for a in actions:
+        obs, reward, done, info = env.step(a)
         curr_pos = info['curr_pos']
-
-        if curr_pos == goal: break
-
+        # if reward == -1000:
+        #     input()
         print('Steps = %s, Timestep Reward=%.3f, curr_tile:%s'
             % (env.step_count, reward, curr_pos))
         env.render()
-
-    # dump the controls using numpy
-    np.savetxt(f'../control_files/{args.map_name}_seed{args.seed}_start_{start_pos[0]},{start_pos[1]}_goal_{goal[0]},{goal[1]}.txt',
-            actions, delimiter=',')
 
 if __name__ == "__main__":
     main()

@@ -5,7 +5,7 @@ import math
 
 REF_VELOCITY = 0.5
 ADJ_STEPS = 45
-ANGLE_THRESHOLD = 0.1
+ANGLE_THRESHOLD = 0.05
 ANGLE_DECAY = math.pi / 100
 PERIOD=0.05
 
@@ -213,7 +213,7 @@ class Policy(NeuralNetworkPolicy):
                     self.x = self.prev_tile[0]
                 else:
                     self.y = self.cur_tile[1]
-            input()
+            # input()
         elif None not in (self.x, self.y,self.orientation):
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
@@ -252,10 +252,14 @@ class Policy(NeuralNetworkPolicy):
         if self.grid.is_junction(cy, cx):
             return True
 
-        return abs(self.need_correction()) > ANGLE_THRESHOLD
+        # return abs(self.need_correction()) < ANGLE_THRESHOLD
+        
+        nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
+        # d = self.get_dir_next_tile(self.cur_tile, (nx, ny))
 
-        # nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
-        # return self.grid.is_junction(ny, nx) #or self.grid.is_turn(ny, nx)
+        # return abs(self.orientation - d * math.pi / 2) > ANGLE_THRESHOLD
+
+        return self.grid.is_junction(ny, nx) #or self.grid.is_turn(ny, nx)
 
     def localize(self, obs):
         #Localization w.r.t center of right lane only if going straight
