@@ -169,7 +169,9 @@ class Policy(NeuralNetworkPolicy):
 
 
             # Localization w.r.t center of right lane only if going straight
-            elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+            # elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+            elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
+                
                 orientation, displacement=self.pose
 
                 if rough_orientation==0:
@@ -189,11 +191,21 @@ class Policy(NeuralNetworkPolicy):
 
                 # Localize orientation
                 self.orientation=(rough_orientation*np.pi/2)+orientation
-
                 print("================")
                 print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
                 print("================")
-            # input()
+            # Cross boundary
+            elif self.x is not None and self.y is not None:
+                d = self.get_dir_next_tile(self.prev_tile, self.cur_tile)
+                if d == 0:
+                    self.x = self.cur_tile[0]
+                elif d == 1:
+                    self.y = self.prev_tile[1]
+                elif d == 2:
+                    self.x = self.prev_tile[0]
+                else:
+                    self.y = self.cur_tile[1]
+            input()
         elif None not in (self.x, self.y,self.orientation):
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
@@ -210,6 +222,8 @@ class Policy(NeuralNetworkPolicy):
 
 
         print("CURRENT ACTION: {}".format(self.current_action))
+        # print(cur_pos, self.grid.is_junction(*cur_pos[::-1]))
+        
         # Robot still in initial tile and initial adjustment is completed
         if self.cur_tile==self.start_pos and self.adjust_done:
             self.prev_act = super().predict(obs)
@@ -217,15 +231,20 @@ class Policy(NeuralNetworkPolicy):
         elif not self.adjust_done:
             self.prev_act = self.adjust_face()
         # Going straight - use NN
-        elif self.current_action==(1,0):
+        elif self.current_action==(1,0) and not self.is_facing_jn():
             self.prev_act = super().predict(obs)
-        # Turning - predetermined action
-        elif self.current_action==(0,-1):
-            self.prev_act = self.get_turn_act("LEFT")
-        elif self.current_action==(0,1):
-            self.prev_act = self.get_turn_act("RIGHT")
+        else:
+            self.prev_act = self.get_turn_act()
 
         return self.prev_act
+
+    def is_facing_jn(self):
+        cx, cy = self.cur_tile
+        if self.grid.is_junction(cy, cx):
+            return True
+
+        nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
+        return self.grid.is_junction(ny, nx) or self.grid.is_turn(ny, nx)
 
     def localize(self, obs):
         #Localization w.r.t center of right lane only if going straight
@@ -287,22 +306,26 @@ class Policy(NeuralNetworkPolicy):
             return 1
         return -1
 
-    def get_turn_act(self, action):
+    def get_turn_act(self):
         # New turn action
         if self.turn_step == 0:
             vel = REF_VELOCITY
-            ang = math.pi / 2 if action == "LEFT" else -math.pi / 2
+            ang = self.current_action[1] * math.pi / 2
         # Continued turn action
         else:
             vel, ang = self.prev_act
 
         self.turn_step += 1
 
-        need_correction = self.need_correction()
+        need_correction = self.need_correction() * 2
 
         if need_correction == 0:
             vel = 0.7
             ang = 0
+        elif need_correction > 0:
+            ang = min(need_correction, math.pi / 2)
+        elif need_correction < 0:
+            ang = max(need_correction, -math.pi / 2)
     
         # Decay angle turned over time
         if ang < 0:
@@ -410,12 +433,13 @@ class Policy(NeuralNetworkPolicy):
         if next_tile == self.goal_tile:
             return (x + 0.5, y + 0.5)
         
-        if self.current_action==(1,0):
-            d_path = 1
-        elif self.current_action==(0,-1):
-            d_path = 2
-        else:
-            d_path = 0
+        # if self.current_action==(1,0):
+        #     d_path = 1
+        # elif self.current_action==(0,-1):
+        #     d_path = 2
+        # else:
+        #     d_path = 0
+        d_path = self.get_dir_next_tile(self.cur_tile, (x,y))
 
         if d_path == 0:
             return x + 1, y + 0.75
@@ -438,7 +462,7 @@ class Policy(NeuralNetworkPolicy):
         # Adjust from 1st/4th quad to 3rd/2nd quad
         if dx < 0:
             ang += math.pi
-        # print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
+        print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
         return ang % (2 * math.pi)
 
 
@@ -454,13 +478,9 @@ class Policy(NeuralNetworkPolicy):
         cur_angle %= 2 * math.pi
         d_angle = (ideal_angle - cur_angle) % (2 * math.pi)
         print(f'ideal_angle={ideal_angle},cur_angle={cur_angle}, d_angle={d_angle}')
-        if abs(d_angle) < ANGLE_THRESHOLD:
-            return 0
-        # clockwise
-        if d_angle < math.pi:
-            return 1
-        # anti-clockwise
-        return -1
+        if d_angle > math.pi:
+            d_angle -= 2 * math.pi
+        return d_angle
         
         
     def update_physics(self, action, delta_time=None):
