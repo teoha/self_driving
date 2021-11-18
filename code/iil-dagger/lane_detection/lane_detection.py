@@ -141,17 +141,17 @@ def get_lanes(image, isTurn=False, horizon=1/7):
         right_line=[right_x_start, max_y, right_x_end, min_y]
         fitted_lines.append([right_x_start, max_y, right_x_end, min_y])
 
-    q=input()
-    if q=='l':
-        ## Code to display lane lines
-        line_image = draw_lines(
-            image,
-            [fitted_lines],
-            thickness=5
-        )
-        plt.figure()
-        plt.imshow(line_image)
-        plt.show()
+    # q=input()
+    # if q=='l':
+    #     ## Code to display lane lines
+    #     line_image = draw_lines(
+    #         image,
+    #         [fitted_lines],
+    #         thickness=5
+    #     )
+    #     plt.figure()
+    #     plt.imshow(line_image)
+    #     plt.show()
 
     return left_line, right_line
 
