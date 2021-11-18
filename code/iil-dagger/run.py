@@ -115,7 +115,7 @@ def main():
             action = action.numpy()
         except AttributeError:
             pass
-        print(f'action={action}')
+        # print(f'action={action}')
         actions.append(action)
         obs, reward, done, info = env.step(action)
         curr_pos = info['curr_pos']

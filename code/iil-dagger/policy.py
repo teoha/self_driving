@@ -134,7 +134,7 @@ class Policy(NeuralNetworkPolicy):
             if self.path is None or not (*self.cur_tile,self.face) in self.path:
                 self.path=self.get_path(self.goal_tile, (cur_pos[0],cur_pos[1],rough_orientation))
                 # print(self.path)
-            # print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
+            print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
             self.current_action=self.path[(cur_pos[0],cur_pos[1] ,rough_orientation)]
 
             # Localization after reaching FIRST new tile using actions
@@ -142,6 +142,7 @@ class Policy(NeuralNetworkPolicy):
             # input()
             if self.prev_tile == self.start_pos:
                 orientation, displacement = self.orientation, 0.75-self.y
+                print("displacement:{}, orientation:{}".format(displacement,orientation))
 
                 if rough_orientation==0:
                     self.x=rough_x
@@ -196,9 +197,9 @@ class Policy(NeuralNetworkPolicy):
         elif None not in (self.x, self.y,self.orientation):
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
-            
             self.step(np.array(prev_prev_act))
             print("================")
+            print("action to localize:{}".format(prev_prev_act))
             # After initial adjustment done while still in the starting tile
             if cur_pos==self.start_pos and self.adjust_done:
                 print("Initial tile localization")
@@ -371,6 +372,7 @@ class Policy(NeuralNetworkPolicy):
         if self.adjust_done:
             self.adj_step = 0
             orientation, displacement = self.pose
+            print("OD:{},{}".format(*self.pose))
             self.x, self.y, self.orientation = 0, 0.75-displacement, orientation
             # input()
             return 0,0

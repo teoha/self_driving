@@ -73,7 +73,7 @@ def get_lanes(image, isTurn=False, horizon=1/7):
         theta=np.pi / 60,
         threshold=300,
         lines=np.array([]),
-        minLineLength=40,
+        minLineLength=200,
         maxLineGap=25
     )
 
@@ -183,6 +183,7 @@ def get_pose(obs, isTurn=False, horizon=1/7):
         return left_angle, left_dist_from_center
     if white_right is not None: # if yellow marker cannot be found, use white lane marker
         right_angle, right_dist=get_raw_pose(white_right)
+        print("right angle:{}, right distance:{}".format(right_angle,right_dist))
         right_dist_from_center=right_dist-0.25
         return right_angle, right_dist_from_center
     if yellow_right is not None: # use yellow marker on the right to localize
