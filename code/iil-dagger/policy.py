@@ -222,8 +222,8 @@ class Policy(NeuralNetworkPolicy):
 
         # Localization w.r.t center of right lane only if going straight
         # elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
-        elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]) and not face_turn:
-        # elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
+        # elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]) and not face_turn:
+        elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
             
             orientation, displacement=self.pose
 
@@ -258,7 +258,7 @@ class Policy(NeuralNetworkPolicy):
                 self.x = self.prev_tile[0]
             else:
                 self.y = self.cur_tile[1]
-        # input()
+        input()
 
     
     def is_facing_jn(self):
