@@ -106,16 +106,16 @@ class Policy(NeuralNetworkPolicy):
         # Get relative pose w.r.t lane
         if not self.adjust_done: #Initial adjustment
             self.pose=get_pose(obs,isTurn=True, horizon=1/2, houghTreshold=50, white_treshold=100,minLineLength=70)
-        elif self.cur_tile==self.start_pos and self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]): #Initial turning
+        elif self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]): #Initial turning
             self.pose=get_pose(obs,isTurn=True,horizon=1/2, houghTreshold=200, white_treshold=100, side_tresholds=1/2,minLineLength=40)
         else:
-            self.pose=get_pose(obs,True)
+            self.pose=get_pose(obs,True, houghTreshold=100,white_treshold=100)
 
         if self.pose is not None:
             orientation, displacement = self.pose
-            print("angle:{}, displacement:{}".format(*self.pose))
+            # print("angle:{}, displacement:{}".format(*self.pose))
             if self.cur_tile==self.start_pos and self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
-                print("RESET")
+                # print("RESET")
                 self.x, self.y, self.orientation = 0, 0.75-displacement, orientation
 
         # Relative localization in turn
@@ -144,17 +144,17 @@ class Policy(NeuralNetworkPolicy):
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
             self.step(np.array(prev_prev_act))
-            print("================")
-            print("action to localize:{}".format(prev_prev_act))
+            # print("================")
+            # print("action to localize:{}".format(prev_prev_act))
             # After initial adjustment done while still in the starting tile
-            if cur_pos==self.start_pos and self.adjust_done:
-                print("Initial tile localization")
+            # if cur_pos==self.start_pos and self.adjust_done:
+            #     print("Initial tile localization")
 
-            print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-            print("================")
+            # print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+            # print("================")
             # input()
 
-        print("CURRENT ACTION: {}".format(self.current_action))
+        # print("CURRENT ACTION: {}".format(self.current_action))
         
         # DETERMINE ACTION
         # Robot still in initial tile and initial adjustment is completed
@@ -166,12 +166,18 @@ class Policy(NeuralNetworkPolicy):
         # Adjusting angle - rotate
         elif not self.adjust_done:
             self.prev_act = self.adjust_face()
+        elif self.current_action==(1,0) and self.grid.is_junction(self.cur_tile[1],self.cur_tile[0]):
+            self.prev_act= super().predict(obs)
         # Going straight - use NN
         elif self.current_action==(1,0) and not self.is_facing_jn():
-        # elif self.current_action==(1,0) and not self.grid.is_junction(*cur_pos[::-1]):
-            self.prev_act = super().predict(obs)
+            if self.pose is not None:
+                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*5
         else:
-            self.prev_act = self.get_turn_act()
+
+            if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and not self.grid.is_junction(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
+                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*5
+            else:
+                self.prev_act = self.get_turn_act()
 
         return self.prev_act
 
@@ -214,9 +220,9 @@ class Policy(NeuralNetworkPolicy):
             # Localize orientation
             self.orientation=(rough_orientation*np.pi/2)+orientation
 
-            print("================")
-            print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-            print("================")
+            # print("================")
+            # print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+            # print("================")
             # input()
 
 
@@ -244,9 +250,9 @@ class Policy(NeuralNetworkPolicy):
 
             # Localize orientation
             self.orientation=(rough_orientation*np.pi/2)+orientation
-            print("================")
-            print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-            print("================")
+            # print("================")
+            # print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+            # print("================")
         # Cross boundary
         elif self.x is not None and self.y is not None:
             d = self.get_dir_next_tile(self.prev_tile, self.cur_tile)
@@ -258,7 +264,7 @@ class Policy(NeuralNetworkPolicy):
                 self.x = self.prev_tile[0]
             else:
                 self.y = self.cur_tile[1]
-        input()
+        # input()
 
     
     def is_facing_jn(self):
@@ -363,7 +369,7 @@ class Policy(NeuralNetworkPolicy):
             self.x, self.y, self.orientation = 0, 0.75-displacement, orientation+self.adj_angle
             self.adj_angle=None
             return 0,0
-        print("init action:{}".format(action))
+        # print("init action:{}".format(action))
 
         return action
 
@@ -381,7 +387,7 @@ class Policy(NeuralNetworkPolicy):
             return (x + 0.5, y + 0.5)
         
         d_path = self.get_dir_next_tile(self.cur_tile, (x,y))
-        print(x, y, d_path)
+        # print(x, y, d_path)
         if d_path == 0:
             return x + 1, y + 0.75
         elif d_path == 1:
@@ -403,7 +409,7 @@ class Policy(NeuralNetworkPolicy):
         # Adjust from 1st/4th quad to 3rd/2nd quad
         if dx < 0:
             ang += math.pi
-        print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
+        # print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
         return ang % (2 * math.pi)
 
 
@@ -418,7 +424,7 @@ class Policy(NeuralNetworkPolicy):
             return None
         cur_angle %= 2 * math.pi
         d_angle = (ideal_angle - cur_angle) % (2 * math.pi)
-        print(f'ideal_angle={ideal_angle},cur_angle={cur_angle}, d_angle={d_angle}')
+        # print(f'ideal_angle={ideal_angle},cur_angle={cur_angle}, d_angle={d_angle}')
         if d_angle > math.pi:
             d_angle -= 2 * math.pi
         return d_angle
@@ -428,7 +434,7 @@ class Policy(NeuralNetworkPolicy):
         if delta_time is None:
             delta_time = 1/30
         wheelVels = action * 1.2 * 1
-        print(wheelVels)
+        # print(wheelVels)
         prev_pos = np.array([self.x,0,self.y])
         # Update the robot's position
         pos, self.orientation = self._update_pos(pos=np.array([self.x,0,self.y]),

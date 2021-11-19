@@ -99,7 +99,8 @@ def main():
     cv2.waitKey(200)
 
     # path = get_path(map_img, goal, start_pos)
-
+    total_reward=0
+    steps=0
 
     policy = get_policy(goal, args, map_img, start_pos)
 
@@ -109,6 +110,7 @@ def main():
     actions = []
 
     for i in range(10000):
+        steps+=1
         action = policy.predict(obs, curr_pos)
         try:
             action = action.numpy()
@@ -117,6 +119,7 @@ def main():
         # print(f'action={action}')
         actions.append(action)
         obs, reward, done, info = env.step(action)
+        total_reward+=reward
         curr_pos = info['curr_pos']
 
         if curr_pos == goal: break
@@ -128,6 +131,6 @@ def main():
     # dump the controls using numpy
     np.savetxt(f'../control_files/{args.map_name}_seed{args.seed}_start_{start_pos[0]},{start_pos[1]}_goal_{goal[0]},{goal[1]}.txt',
             actions, delimiter=',')
-
+    print("REWARD: {}".format(total_reward/steps))
 if __name__ == "__main__":
     main()
