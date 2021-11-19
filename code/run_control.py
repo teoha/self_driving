@@ -56,13 +56,17 @@ def main():
     obs, reward, done, info = env.step((0,0))
     curr_pos = info['curr_pos']
 
+    total = 0
+
     for a in actions:
         obs, reward, done, info = env.step(a)
         curr_pos = info['curr_pos']
         # if reward == -1000:
         #     input()
+        total += reward
         print('Steps = %s, Timestep Reward=%.3f, curr_tile:%s'
             % (env.step_count, reward, curr_pos))
+        print(f'Total reward: {total}, Average reward: {total/env.step_count}')
         env.render()
 
 if __name__ == "__main__":

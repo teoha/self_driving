@@ -171,10 +171,10 @@ class Policy(NeuralNetworkPolicy):
         # Going straight - use NN
         elif self.current_action==(1,0) and not self.is_facing_jn():
             if self.pose is not None:
-                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*3
+                self.prev_act=0.7, -self.pose[0]*3-self.pose[1]*3
         else:
             if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and not self.grid.is_junction(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
-                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*3
+                self.prev_act=0.7, -self.pose[0]*3-self.pose[1]*3
             else:
                 self.prev_act = self.get_turn_act()
 
