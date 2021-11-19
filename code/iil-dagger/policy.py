@@ -169,7 +169,7 @@ class Policy(NeuralNetworkPolicy):
         elif self.current_action==(1,0) and self.grid.is_junction(self.cur_tile[1],self.cur_tile[0]):
             self.prev_act= super().predict(obs)
         # Going straight - use NN
-        elif self.current_action==(1,0) and not self.is_facing_jn():
+        elif self.current_action==(1,0):# and not self.is_facing_jn():
             if self.pose is not None:
                 self.prev_act=0.7, -self.pose[0]*3-self.pose[1]*3
         else:
