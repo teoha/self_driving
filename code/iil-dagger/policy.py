@@ -52,7 +52,7 @@ class Policy(NeuralNetworkPolicy):
 
         # For rotating 180 degrees when facing wrong direction
         self.adj_step = 0
-        self.adjust_done = True
+        self.adjust_done = False
 
         # Localized global orientation
         self.orientation=None
@@ -104,10 +104,10 @@ class Policy(NeuralNetworkPolicy):
 
         # LOCALIZATION
         # Get relative pose w.r.t lane
-        if not self.adjust_done:
-            self.pose=get_pose(obs,True,1/3, 50, 100)
-        elif self.cur_tile==self.start_pos and self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]):
-            self.pose=get_pose(obs,True,1/2.3, 50, 100)
+        if not self.adjust_done: #Initial adjustment
+            self.pose=get_pose(obs,isTurn=True, horizon=1/2, houghTreshold=50, white_treshold=100,minLineLength=70)
+        elif self.cur_tile==self.start_pos and self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]): #Initial turning
+            self.pose=get_pose(obs,isTurn=True,horizon=1/2, houghTreshold=200, white_treshold=100, side_tresholds=1/2,minLineLength=40)
         else:
             self.pose=get_pose(obs,True)
 
@@ -230,7 +230,7 @@ class Policy(NeuralNetworkPolicy):
         # Robot still in initial tile and initial adjustment is completed
         if self.cur_tile==self.start_pos and self.adjust_done:
             if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
-                self.prev_act=0.4, -self.pose[0]*2
+                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*5
             else:
                 self.prev_act = super().predict(obs)
         # Adjusting angle - rotate

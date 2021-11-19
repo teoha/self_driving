@@ -39,21 +39,21 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
-def get_yellow_lanes(obs, isTurn=False, horizon=1/7, houghTreshold=300):
+def get_yellow_lanes(obs, isTurn=False, horizon=1/7, houghTreshold=300, side_tresholds=1/2.3,minLineLength=200):
     image=select_yellow(obs)
-    return get_lanes(image, isTurn, houghTreshold)
+    return get_lanes(image, isTurn, horizon, houghTreshold, side_tresholds, minLineLength)
 
-def get_white_lanes(obs,isTurn=False, horizon=1/7, houghTreshold=300, white_treshold=168):
+def get_white_lanes(obs,isTurn=False, horizon=1/7, houghTreshold=300, white_treshold=168, side_tresholds=1/2.3,minLineLength=200):
     image=select_white(obs)
-    return get_lanes(image, isTurn, houghTreshold)
+    return get_lanes(image, isTurn, horizon, houghTreshold, side_tresholds, minLineLength)
 
-def get_lanes(image, isTurn=False, horizon=1/7, houghTreshold=300):
+def get_lanes(image, isTurn=False, horizon=1/7, houghTreshold=300, side_tresholds=1/2.3,minLineLength=200):
     height,width,channels=image.shape
     region_of_interest_vertices = [
         (0, height),
-        (0, height/2.3),
-        (width/2, height/horizon),
-        (width, height/2.3),
+        (0, height*side_tresholds),
+        (width/2, height*horizon),
+        (width, height*side_tresholds),
         (width, height),
     ]
 
@@ -71,14 +71,13 @@ def get_lanes(image, isTurn=False, horizon=1/7, houghTreshold=300):
     # plt.imshow(cropped_image)
     # plt.show()
 
-
     lines = cv2.HoughLinesP(
         cropped_image,
         rho=6,
         theta=np.pi / 60,
         threshold=houghTreshold,
         lines=np.array([]),
-        minLineLength=40,
+        minLineLength=minLineLength,
         maxLineGap=25
     )
 
@@ -178,9 +177,9 @@ def get_raw_pose(line):
 
     return abs(angle), abs(dist)
 
-def get_pose(obs, isTurn=False, horizon=1/7, houghTreshold=300, white_treshold=168):
-    white_left, white_right = get_white_lanes(obs.copy(), isTurn, horizon, houghTreshold, white_treshold)
-    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn, horizon, houghTreshold)
+def get_pose(obs, isTurn=False, horizon=1/7, houghTreshold=300, white_treshold=168, side_tresholds=1/2.3,minLineLength=200):
+    white_left, white_right = get_white_lanes(obs.copy(), isTurn, horizon, houghTreshold, white_treshold, side_tresholds, minLineLength=minLineLength)
+    yellow_left, yellow_right = get_yellow_lanes(obs.copy(), isTurn, horizon, houghTreshold, side_tresholds,minLineLength=minLineLength)
 
     if yellow_left is not None: # Use yellow center lane marker to localize first
         print("left, yellow")
