@@ -5,7 +5,7 @@ import math
 
 REF_VELOCITY = 0.5
 ADJ_STEPS = 45
-ANGLE_THRESHOLD = 0.1
+ANGLE_THRESHOLD = 0.05
 ANGLE_DECAY = math.pi / 100
 PERIOD=0.05
 
@@ -138,79 +138,8 @@ class Policy(NeuralNetworkPolicy):
 
             # Reset any turning counters
             self.turn_step = 0
+            self.localize_tile_change()
 
-            # Localize rough pose
-            rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)            
-            rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
-            rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
-            self.last_orientation=rough_orientation
-
-
-            # Determine current action
-            # Check if tile is in plan, if not re-plan and follow new path
-            if self.path is None or not (*self.cur_tile,self.face) in self.path:
-                self.path=self.get_path(self.goal_tile, (cur_pos[0],cur_pos[1],rough_orientation))
-                # print(self.path)
-            # print("ROUGH POSITION: {},{},{}".format(rough_x,rough_y,rough_orientation))
-            self.current_action=self.path[(cur_pos[0],cur_pos[1] ,rough_orientation)]
-
-            # Localization after reaching FIRST new tile using actions
-            # print("PREVIOUS TILE:{}".format(self.prev_tile))
-            # input()
-            if self.prev_tile == self.start_pos:
-                orientation, displacement = self.orientation, 0.75-self.y
-                # print("displacement:{}, orientation:{}".format(displacement,orientation))
-
-                if rough_orientation==0:
-                    self.x=rough_x
-                    self.y=rough_y+0.75-displacement
-                elif rough_orientation==1:
-                    self.x=rough_x+0.75-displacement
-                    self.y=rough_y
-                elif rough_orientation==2:
-                    self.x=rough_x
-                    self.y=rough_y+0.25+displacement
-                elif rough_orientation==3:
-                    self.x=rough_x+0.25+displacement
-                    self.y=rough_y
-                else:
-                    print("invalid orientation")
-
-                # Localize orientation
-                self.orientation=(rough_orientation*np.pi/2)+orientation
-
-                print("================")
-                print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-                print("================")
-                # input()
-
-
-            # Localization w.r.t center of right lane only if going straight
-            elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
-                orientation, displacement=self.pose
-
-                if rough_orientation==0:
-                    self.x=rough_x
-                    self.y=rough_y+0.75-displacement
-                elif rough_orientation==1:
-                    self.x=rough_x+0.75-displacement
-                    self.y=rough_y
-                elif rough_orientation==2:
-                    self.x=rough_x
-                    self.y=rough_y+0.25+displacement
-                elif rough_orientation==3:
-                    self.x=rough_x+0.25+displacement
-                    self.y=rough_y
-                else:
-                    print("invalid orientation")
-
-                # Localize orientation
-                self.orientation=(rough_orientation*np.pi/2)+orientation
-
-                print("================")
-                print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-                print("================")
-            # input()
         elif None not in (self.x, self.y,self.orientation) and prev_prev_act is not None:
             # If localization fails for in junction and turns
             # Localize based on actions since last localization
@@ -225,8 +154,9 @@ class Policy(NeuralNetworkPolicy):
             print("================")
             # input()
 
-
         print("CURRENT ACTION: {}".format(self.current_action))
+        
+        # DETERMINE ACTION
         # Robot still in initial tile and initial adjustment is completed
         if self.cur_tile==self.start_pos and self.adjust_done:
             if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
@@ -237,92 +167,132 @@ class Policy(NeuralNetworkPolicy):
         elif not self.adjust_done:
             self.prev_act = self.adjust_face()
         # Going straight - use NN
-        elif self.current_action==(1,0):
+        elif self.current_action==(1,0) and not self.is_facing_jn():
+        # elif self.current_action==(1,0) and not self.grid.is_junction(*cur_pos[::-1]):
             self.prev_act = super().predict(obs)
-        # Turning - predetermined action
-        elif self.current_action==(0,-1):
-            self.prev_act = self.get_turn_act("LEFT")
-        elif self.current_action==(0,1):
-            self.prev_act = self.get_turn_act("RIGHT")
+        else:
+            self.prev_act = self.get_turn_act()
 
         return self.prev_act
 
-    def localize(self, obs):
-        #Localization w.r.t center of right lane only if going straight
-        pose=get_pose(obs)
-        # print("pose:{},{}".format(*pose))
-        # print("{},{},{}".format(self.prev_tile, self.prev_tile_step,self.cur_tile))
-        # print("turning:{}".format(self.is_turning()))
-        # input()
-        # if pose is not None and self.is_turning()==0:
-        # input()
-        if pose is None or self.is_turning(): return
-        # if pose is not None and self.prev_tile != self.cur_tile:
-        orientation, displacement=pose
-        rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)
-
-        # Localize position
+    def localize_tile_change(self):
+        # Localize rough pose
+        rough_orientation=self.get_dir_next_tile(self.prev_tile,self.cur_tile) #get rough orientation (EWNS)            
         rough_x = self.cur_tile[0] if self.cur_tile[0]==self.prev_tile[0] else max(self.cur_tile[0],self.prev_tile[0])
         rough_y = self.cur_tile[1] if self.cur_tile[1]==self.prev_tile[1] else max(self.cur_tile[1],self.prev_tile[1])
+        self.last_orientation=rough_orientation
 
-        if rough_orientation==0:
-            self.x=rough_x
-            self.y=rough_y+0.75-displacement
-        elif rough_orientation==1:
-            self.x=rough_x+0.75-displacement
-            self.y=rough_y
-        elif rough_orientation==2:
-            self.x=rough_x
-            self.y=rough_y+0.25+displacement
-        elif rough_orientation==3:
-            self.x=rough_x+0.25+displacement
-            self.y=rough_y
-        else:
-            print("invalid orientation")
 
-        # Localize orientation
-        self.orientation=(rough_orientation*np.pi/2)+orientation
+        # Determine current action
+        # Check if tile is in plan, if not re-plan and follow new path
+        if self.path is None or not (*self.cur_tile,self.face) in self.path:
+            self.path=self.get_path(self.goal_tile, (*self.cur_tile,rough_orientation))
+        self.current_action=self.path[(*self.cur_tile ,rough_orientation)]
 
-        print("================")
-        print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
-        print("================")
+        nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
+        face_trouble = self.grid.is_turn(ny, nx)
 
-    def is_turning(self):
-        '''
-        returns 1 if turning left
-        returns -1 if turning right
-        returns 0 if going straight
-        '''
-        pi, pj = self.prev_tile
-        ci, cj = self.cur_tile
-        ni, nj = self.path[self.cur_tile]
-        dpi = ci - pi
-        dpj = cj - pj        
-        dni = ni - ci
-        dnj = nj - cj
-        # print("dpi:{}, dpj:{}, dni:{}, dnj:{}".format(dpi,dpj,dni,dnj))
-        if dpi == dni and dpj == dnj or dpi == 0 and dpj == 0:
-            return 0
-        if dpi * dnj == -1 or dpj * dni == 1:
-            return 1
-        return -1
+        # Localization after reaching FIRST new tile using actions
+        if self.prev_tile == self.start_pos:
+            orientation, displacement = self.orientation, 0.75-self.y
 
-    def get_turn_act(self, action):
+            if rough_orientation==0:
+                self.x=rough_x
+                self.y=rough_y+0.75-displacement
+            elif rough_orientation==1:
+                self.x=rough_x+0.75-displacement
+                self.y=rough_y
+            elif rough_orientation==2:
+                self.x=rough_x
+                self.y=rough_y+0.25+displacement
+            elif rough_orientation==3:
+                self.x=rough_x+0.25+displacement
+                self.y=rough_y
+            else:
+                print("invalid orientation")
+
+            # Localize orientation
+            self.orientation=(rough_orientation*np.pi/2)+orientation
+
+            print("================")
+            print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+            print("================")
+            # input()
+
+
+        # Localization w.r.t center of right lane only if going straight
+        # elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]):
+        elif self.pose is not None and self.grid.is_straight(self.cur_tile[1], self.cur_tile[0]) and not face_turn:
+        # elif self.pose is not None and self.grid.is_straight(*self.cur_tile[::-1]) and not self.grid.is_junction(*self.cur_tile[::-1]):
+            
+            orientation, displacement=self.pose
+
+            if rough_orientation==0:
+                self.x=rough_x
+                self.y=rough_y+0.75-displacement
+            elif rough_orientation==1:
+                self.x=rough_x+0.75-displacement
+                self.y=rough_y
+            elif rough_orientation==2:
+                self.x=rough_x
+                self.y=rough_y+0.25+displacement
+            elif rough_orientation==3:
+                self.x=rough_x+0.25+displacement
+                self.y=rough_y
+            else:
+                print("invalid orientation")
+
+            # Localize orientation
+            self.orientation=(rough_orientation*np.pi/2)+orientation
+            print("================")
+            print("x:{}, y:{}, theta:{}".format(self.x, self.y, self.orientation))
+            print("================")
+        # Cross boundary
+        elif self.x is not None and self.y is not None:
+            d = self.get_dir_next_tile(self.prev_tile, self.cur_tile)
+            if d == 0:
+                self.x = self.cur_tile[0]
+            elif d == 1:
+                self.y = self.prev_tile[1]
+            elif d == 2:
+                self.x = self.prev_tile[0]
+            else:
+                self.y = self.cur_tile[1]
+        # input()
+
+    
+    def is_facing_jn(self):
+        """
+        Determine whether facing junction or not
+        """
+        cx, cy = self.cur_tile
+        if self.grid.is_junction(cy, cx):
+            return True
+        
+        nx, ny, _ = get_next_pose((*self.cur_tile, self.last_orientation), self.current_action)
+
+        return self.grid.is_junction(ny, nx)
+
+    def get_turn_act(self):
         # New turn action
         if self.turn_step == 0:
             vel = REF_VELOCITY
-            ang = math.pi / 2 if action == "LEFT" else -math.pi / 2
+            ang = -self.current_action[1] * math.pi / 2
         # Continued turn action
         else:
             vel, ang = self.prev_act
 
         self.turn_step += 1
 
-        need_correction = self.need_correction()
+        need_correction = self.need_correction() * 2
 
-        if need_correction == 0:
+        # Faster if going straight
+        if abs(need_correction) < ANGLE_THRESHOLD:
             vel = 0.7
-            ang = 0
+        elif need_correction > 0:
+            ang = min(need_correction, math.pi / 2)
+        elif need_correction < 0:
+            ang = max(need_correction, -math.pi / 2)
     
         # Decay angle turned over time
         if ang < 0:
@@ -360,25 +330,13 @@ class Policy(NeuralNetworkPolicy):
         '''
         self.face = self.get_dir_next_tile(self.prev_tile, self.cur_tile)
         return self.face
-    
-    def get_dir_path(self):
-        '''
-        Returns direction to get to next tile according to path
-        0, 1, 2, 3: Right, Up, Left, Down
-        '''
-        return self.get_dir_next_tile(self.cur_tile, self.path[self.cur_tile])
 
     def adjust_face(self):
         '''
         Returns action to rotate, keeps track of # steps taken rotating
         0, math.pi / 2
         '''
-        # dir_path = self.get_dir_path()
-        # if self.face is None or dir_path is None:
-        #     return None, None
-        # if self.face == dir_path:
-        #     return 0, 0
-        
+
         threshold=1
         action=self.adj_action if self.adj_action is not None else (0, math.pi / 2)
 
@@ -388,13 +346,11 @@ class Policy(NeuralNetworkPolicy):
             self.initial_pose=self.pose
             self.adj_angle=-orientation
             self.adj_steps_req=abs(orientation)/0.07054
-            # action = 0, self.adj_angle
             self.adj_step += 1
             self.adj_action=(0, math.pi/2) if self.adj_angle>0 else (0, -math.pi/2)
             # self.adjust_done = orientation>-threshold and orientation<threshold # turn until relatively straight to a lane
             action=self.adj_action
         elif self.adj_angle is not None:
-            # action = 0, self.adj_angle
             self.adj_step += 1
 
         if self.adj_steps_req is not None:
@@ -404,31 +360,12 @@ class Policy(NeuralNetworkPolicy):
         if self.adjust_done:
             self.adj_step = 0
             orientation, displacement = self.initial_pose
-            # print("OD:{},{}".format(*self.pose))
             self.x, self.y, self.orientation = 0, 0.75-displacement, orientation+self.adj_angle
             self.adj_angle=None
-            # input()
             return 0,0
         print("init action:{}".format(action))
 
         return action
-
-    def to_adjust(self):
-        '''
-        Returns boolean whether turning around is needed
-        '''
-        if self.face is None:
-            return False
-        # dir_path = self.get_dir_path()
-        self.turn_delta = (dir_path - self.face) % 4
-        return self.turn_delta == 2
-
-    # def get_new_pose(self, x,y,theta,v,omega,t):
-    #     new_x=x-(v/omega)*np.sin(theta)+(v/omega)*np.sin(theta+omega*t)
-    #     new_y=y+(v/omega)*np.cos(theta)-(v/omega)*np.cos(theta+omega*t)
-    #     new_theta=theta+omega*t
-
-    #     return new_x, new_y, new_theta
 
     def get_next_tile_exact(self):
         '''
@@ -443,13 +380,8 @@ class Policy(NeuralNetworkPolicy):
         if next_tile == self.goal_tile:
             return (x + 0.5, y + 0.5)
         
-        if self.current_action==(1,0):
-            d_path = 1
-        elif self.current_action==(0,-1):
-            d_path = 2
-        else:
-            d_path = 0
-
+        d_path = self.get_dir_next_tile(self.cur_tile, (x,y))
+        print(x, y, d_path)
         if d_path == 0:
             return x + 1, y + 0.75
         elif d_path == 1:
@@ -471,7 +403,7 @@ class Policy(NeuralNetworkPolicy):
         # Adjust from 1st/4th quad to 3rd/2nd quad
         if dx < 0:
             ang += math.pi
-        # print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
+        print(f'nx={nx},ny={ny},cx={cx},cy={cy},angle={ang}')
         return ang % (2 * math.pi)
 
 
@@ -487,13 +419,9 @@ class Policy(NeuralNetworkPolicy):
         cur_angle %= 2 * math.pi
         d_angle = (ideal_angle - cur_angle) % (2 * math.pi)
         print(f'ideal_angle={ideal_angle},cur_angle={cur_angle}, d_angle={d_angle}')
-        if abs(d_angle) < ANGLE_THRESHOLD:
-            return 0
-        # clockwise
-        if d_angle < math.pi:
-            return 1
-        # anti-clockwise
-        return -1
+        if d_angle > math.pi:
+            d_angle -= 2 * math.pi
+        return d_angle
         
         
     def update_physics(self, action, delta_time=None):
@@ -579,16 +507,6 @@ class Policy(NeuralNetworkPolicy):
         vels = np.array([u_l_limited, u_r_limited])
 
         self.update_physics(vels)
-    
-    def get_dir_vec(self, cur_angle):
-        """
-        Vector pointing in the direction the agent is looking
-        """
-
-        x = math.cos(cur_angle)
-        z = -math.sin(cur_angle)
-        return np.array([x, 0, z])
-
 
     def get_right_vec(self, angle=None):
         """
@@ -629,3 +547,4 @@ class Policy(NeuralNetworkPolicy):
         planner = BFS(goal, start_pose, self.grid.get_grid())
         path = planner.search()
         return path
+        
