@@ -103,18 +103,22 @@ def get_lanes(image, isTurn=False, horizon=1/7, houghTreshold=300, side_treshold
                     max_right_y=max(y1,y2)
                     right_line_x=[x1, x2]
                     right_line_y=[y1, y2]
-    else:                        
+    else:
+        max_left_y=float('-inf')
+        max_right_y=float('-inf')
         for line in lines:
             for x1, y1, x2, y2 in line:
                 slope = (y2 - y1) / (x2 - x1) # <-- Calculating the slope.
                 if math.fabs(slope) < 0.4: # <-- Only consider extreme slope
                     continue
-                if slope <= 0: # <-- If the slope is negative, left group.
-                    left_line_x.extend([x1, x2])
-                    left_line_y.extend([y1, y2])
-                else: # <-- Otherwise, right group.
-                    right_line_x.extend([x1, x2])
-                    right_line_y.extend([y1, y2])
+                if slope <= 0 and (y1 > max_left_y or y2 > max_left_y): # <-- If the slope is negative, left group.
+                    max_left_y=max(y1,y2)
+                    left_line_x=[x1, x2]
+                    left_line_y=[y1, y2]
+                elif slope >0 and (y1 > max_right_y or y2 > max_right_y): # <-- Otherwise, right group.
+                    max_right_y=max(y1,y2)
+                    right_line_x=[x1, x2]
+                    right_line_y=[y1, y2]                        
 
 
     min_y = int(image.shape[0] * (1 / 7)) # <-- Just below the horizon

@@ -109,7 +109,7 @@ class Policy(NeuralNetworkPolicy):
         elif self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]): #Initial turning
             self.pose=get_pose(obs,isTurn=True,horizon=1/2, houghTreshold=200, white_treshold=100, side_tresholds=1/2,minLineLength=40)
         else:
-            self.pose=get_pose(obs,True, houghTreshold=100,white_treshold=100)
+            self.pose=get_pose(obs, houghTreshold=50,white_treshold=100)
 
         if self.pose is not None:
             orientation, displacement = self.pose
