@@ -160,7 +160,7 @@ class Policy(NeuralNetworkPolicy):
         # Robot still in initial tile and initial adjustment is completed
         if self.cur_tile==self.start_pos and self.adjust_done:
             if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
-                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*5
+                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*2
             else:
                 self.prev_act = super().predict(obs)
         # Adjusting angle - rotate
@@ -171,11 +171,10 @@ class Policy(NeuralNetworkPolicy):
         # Going straight - use NN
         elif self.current_action==(1,0) and not self.is_facing_jn():
             if self.pose is not None:
-                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*5
+                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*2
         else:
-
             if self.grid.is_turn(self.cur_tile[1],self.cur_tile[0]) and not self.grid.is_junction(self.cur_tile[1],self.cur_tile[0]) and self.pose is not None:
-                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*5
+                self.prev_act=0.4, -self.pose[0]*2-self.pose[1]*2
             else:
                 self.prev_act = self.get_turn_act()
 
